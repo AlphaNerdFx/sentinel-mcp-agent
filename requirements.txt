@@ -1,0 +1,26 @@
+# --- Model Context Protocol (MCP) Stack ---
+mcp>=1.2.0
+fastmcp>=0.4.1
+langchain-mcp-adapters>=0.1.0
+
+# --- Agent Orchestration & Core Framework ---
+langgraph>=0.2.20
+langchain-core>=0.3.15
+langchain-openai>=0.2.5
+
+# --- Data Validation & Serialization ---
+pydantic>=2.9.0
+
+# --- Sandbox Isolation Runtime ---
+docker>=7.1.0
+
+# --- External Search Providers ---
+duckduckgo-search>=6.3.0
+requests>=2.32.0
+
+# --- Hardware Telemetry & Monitoring ---
+nvidia-ml-py>=12.560.30
+
+# --- Quality Assurance & Verification ---
+pytest>=8.3.0
+pytest-asyncio>=0.24.0
