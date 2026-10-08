@@ -1,0 +1,113 @@
+# Contributing to the Enterprise MCP Tool-Calling Agent
+
+Thank you for your interest in contributing. This repository is built as an enterprise-grade reference architecture for autonomous tool-calling systems. To maintain high engineering standards, all contributions must respect our architectural invariants, deterministic testing contracts, and security boundaries.
+
+---
+
+## 1. Architectural Invariants (Non-Negotiable Rules)
+
+[Certain] Every Pull Request (PR) must preserve the following architectural boundaries. Any PR that violates these invariants will be rejected during automated or manual review:
+
+1.  **Strict Sandbox Isolation (ADR-03):** 
+    *   Arbitrary Python code execution must **never** occur on the host machine using `exec()`, `eval()`, or raw `subprocess.run()`.
+    *   Code must execute inside an ephemeral container via the Docker daemon socket configured with `--network none`, `--memory 256m`, `--cpus 1.0`, `--read-only`, and a 5-second termination timeout.
+2.  **Hardware VRAM Ceiling (ADR-04 & ADR-05):**
+    *   The baseline deployment target is an 8 GB VRAM GPU (RTX 4060 Laptop). 
+    *   Static model allocations must not exceed 4,700 MB combined (LLM + Embedder), ensuring that total runtime memory (including KV cache) stays under the 7,200 MB operating threshold.
+3.  **Deterministic Loop Mitigation (ADR-06):**
+    *   Do not replace the SHA-256 tool-call fingerprint circuit breaker with simple while-loops or unstructured retry prompts.
+    *   Tool signatures must be hashed using canonicalized (sorted keys, whitespace-stripped) JSON argument strings.
+4.  **Database Read-Only Enclosure (ADR-08):**
+    *   The SQLite connection must remain in read-only URI mode (`file:...mode=ro`). Do not add write, update, or delete capabilities to the analytical database tool.
+5.  **Structured Observability (ADR-09):**
+    *   Do not introduce unformatted terminal `print()` statements into core agent logic. All telemetry must emit structured, un-nested JSON matching the schema in `agent_system_prd_v1.md`.
+
+---
+
+## 2. Development Environment Setup
+
+### Prerequisites
+*   Python 3.11 or higher
+*   Docker Engine or Docker Desktop with active socket access (`/var/run/docker.sock`)
+*   Ollama running locally (`http://localhost:11434`)
+*   Git
+
+### Local Setup Steps
+```bash
+# 1. Fork and clone the repository
+git clone https://github.com/your-username/mcp-agent-system.git
+cd mcp-agent-system
+
+# 2. Create and activate a clean virtual environment
+python3.11 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# 3. Install runtime dependencies and developer tooling
+pip install -r requirements.txt
+pip install pytest pytest-mock ruff mypy
+
+# 4. Pull required model artifacts in Ollama
+ollama pull qwen2.5:7b-instruct-q4_K_M
+ollama pull nomic-embed-text:v1.5
+
+# 5. Verify local Docker socket access
+python scripts/check_env.py
+```
+
+## 3. Git Workflow & Commit Guidelines
+### 3.1 Branching Strategy
+* main: Protected branch. Always deployable and passing all CI checks.
+* Feature branches must branch off main using the following naming conventions:
+* * feat/feature-name: New features or capabilities.
+* * fix/bug-name: Bug fixes and error-handling improvements.
+* * perf/optimization: Performance or memory optimizations.
+* * test/test-suite: Additions or updates to test coverage.
+* * docs/documentation: Updates to PRD, ADRs, or README files.
+## 3.2 Conventional Commits
+[Certain] We follow the Conventional Commits 1.0.0 specification. Commit messages must follow this structure:
+```text
+<type>(<scope>): <short description>
+
+[optional body explaining technical reasoning and trade-offs]
+
+[optional footer referencing issues or PRD requirements]
+```
+Examples:
+* feat(sandbox): add temporary memory buffer enforcement to docker runner
+* fix(loop-detector): canonicalize nested json keys before sha256 hashing
+* test(sql): add unit test asserting drop table rejection in read-only mode
+
+## 4. Code Quality & Formatting Standards
+Before submitting a PR, ensure your code passes static analysis, typing checks, and style linters:
+```bash
+# 1. Run Ruff for linting and code formatting
+ruff check src/ tests/
+ruff format --check src/ tests/
+
+# 2. Run Mypy for static type checking
+mypy src/ --strict
+```
+Formatting Guidelines
+* Line Length: 100 characters maximum.
+* Type Annotations: All function signatures (arguments and return types) must be explicitly typed using standard Python type hints.
+* Docstrings: All public classes and functions must include docstrings documenting parameters, return types, and potential exceptions.
+## 5. Testing Requirements
+[Certain] Pull requests will not be merged without passing automated test coverage. We enforce the following testing rules:
+```bash
+# Run the entire test suite locally
+pytest tests/ -v
+```
+1. Zero Network Calls in Unit Tests: Unit tests in tests/unit/ must never make live network requests to external search engines or cloud model providers. Use pytest-mock or fixtures to mock external responses.
+2. Deterministic Pass Rate: Tests must pass reliably across multiple runs without flakiness. Flaky tests depending on non-deterministic LLM text generation will be rejected.
+3. Security Regression Coverage: Any PR modifying the sandbox (docker_runner.py), database tool (database.py), or loop detector (state.py) must include corresponding unit tests demonstrating containment of malicious or cyclic inputs.
+## 6. Pull Request Review Checklist
+When opening a Pull Request, copy and complete this checklist in your PR description:
+```markdown
+### PR Checklist
+- [ ] Code complies with all 5 Architectural Invariants (Section 1).
+- [ ] Added unit tests covering newly introduced logic or bug fixes.
+- [ ] All tests pass locally (`pytest tests/`).
+- [ ] Static analysis passes (`ruff check .` and `mypy src/`).
+- [ ] No new third-party dependencies added without architectural justification.
+- [ ] Documentation updated (README, PRD, or docstrings) if behavior changed.
+```
