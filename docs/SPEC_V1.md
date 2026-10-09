@@ -504,3 +504,232 @@ Verification Cross-Reference Matrix
 
 **Implementation Order:** When implementing Phase 1 and Phase 2 from `TODO.md`, implement components in order from bottom to top:
 **COMP-08** (Telemetry) $\rightarrow$ **COMP-06** (Database) $\rightarrow$ **COMP-05** (Docker) $\rightarrow$ **COMP-07** (Search) $\rightarrow$ **COMP-04** (FastMCP) $\rightarrow$ **COMP-03** (Circuit Breaker) $\rightarrow$ **COMP-02** (Adapter) $\rightarrow$ **COMP-01** (Graph) $\rightarrow$ **COMP-09** (CLI) [Certain].
+
+---
+
+# Technical Component Specifications (SPEC_V1.md)
+
+**System Target:** Enterprise MCP Tool-Calling Agent with Observability
+**Document Version:** 1.1.0 (Release Candidate Specification)
+**Tracking PRD:** `PRD_V1.md`
+
+---
+
+## Component Index
+
+1. [COMP-01: Orchestration Engine &amp; State Machine](#comp-01-orchestration-engine--state-machine)
+2. [COMP-02: Model Provider Adapter](#comp-02-model-provider-adapter)
+3. [COMP-03: Tool-Call Loop Detector &amp; Circuit Breaker](#comp-03-tool-call-loop-detector--circuit-breaker)
+4. [COMP-04: FastMCP Tool Server &amp; Resource Registry](#comp-04-fastmcp-tool-server--resource-registry)
+5. [COMP-05: Docker Container Sandbox Runner](#comp-05-docker-container-sandbox-runner)
+6. [COMP-06: Relational Database Access Engine](#comp-06-relational-database-access-engine)
+7. [COMP-07: Resilient Multi-Provider Search Engine](#comp-07-resilient-multi-provider-search-engine)
+8. [COMP-08: Structured Telemetry &amp; Cost Accounting Engine](#comp-08-structured-telemetry--cost-accounting-engine)
+9. [COMP-09: CLI Application Entrypoint](#comp-09-cli-application-entrypoint)
+
+---
+
+### COMP-01: Orchestration Engine & State Machine
+
+* **Target Files:** `src/agent/graph.py` & `src/agent/nodes.py`
+* **Public Interface:**
+  ```python
+  from typing import Annotated, Dict, List, Literal, TypedDict, Any
+  from langchain_core.messages import BaseMessage
+  from langgraph.graph.message import add_messages
+
+  class AgentState(TypedDict):
+      messages: Annotated[List[BaseMessage], add_messages]
+      iteration_count: int
+      tool_call_history: List[str]
+      session_id: str
+
+  def agent_node(state: AgentState) -> Dict[str, Any]: ...
+  def tool_execution_node(state: AgentState) -> Dict[str, Any]: ...
+  def force_end_node(state: AgentState) -> Dict[str, Any]: ...
+  def should_continue(state: AgentState) -> Literal["call_tools", "end", "force_end"]: ...
+  ```
+* **Invariants:**
+    1. If iteration_count >= 10, should_continue must return "force_end".
+    2. Message updates must append immutably via the add_messages reducer.
+    3. Graph execution overhead must not exceed ≤10ms per node transition.
+
+### COMP-02: Model Provider Adapter
+* **Target File:** src/agent/model_adapter.py
+* **Public Interface:**
+```python
+from typing import List, Protocol
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.tools import BaseTool
+
+class ModelAdapterProtocol(Protocol):
+    def get_model(self, tools: List[BaseTool]) -> BaseChatModel: ...
+
+class LocalOllamaAdapter:
+    def __init__(self, base_url: str = "http://localhost:11434/v1", model_name: str = "qwen2.5:7b-instruct-q4_K_M", temperature: float = 0.0) -> None: ...
+    def get_model(self, tools: List[BaseTool]) -> BaseChatModel: ...
+
+class CloudFallbackAdapter:
+    def __init__(self, api_key: str, model_name: str = "gpt-4o-mini", temperature: float = 0.0) -> None: ...
+    def get_model(self, tools: List[BaseTool]) -> BaseChatModel: ...
+```
+* **Invariants:**
+    1. temperature must be hard-coded to 0.0 across all implementations.
+    2. Automatic failover to CloudFallbackAdapter if local Ollama does not respond to health checks within 1.0 second.
+
+### COMP-03: Tool-Call Loop Detector & Circuit Breaker
+* **Target File:** src/agent/circuit_breaker.py
+* **Public Interface:**
+```python
+from typing import Any, Dict, List, Tuple
+
+class ToolCallCircuitBreaker:
+    @classmethod
+    def normalize_arguments(cls, tool_name: str, args: Dict[str, Any]) -> Dict[str, Any]: ...
+    @classmethod
+    def compute_fingerprint(cls, tool_name: str, args: Dict[str, Any]) -> str: ...
+    @classmethod
+    def inspect_call(cls, fingerprint: str, history: List[str], strike_threshold: int = 3) -> Tuple[bool, int]: ...
+```
+* **Invariants:**
+    1. SQL tool calls must be parsed into an AST via `sqlglot` and transpiled to canonical dialect formatting before hashing.
+    2. Identical tool fingerprints recurring 3 times must trip the breaker and bypass execution.
+
+### COMP-04: FastMCP Tool Server & Resource Registry
+* **Target File:** src/server.py
+* **Public Interface:**
+```python
+from fastmcp import FastMCP
+
+mcp = FastMCP(name="Enterprise-Tool-Server")
+
+@mcp.resource("schema://main")
+def get_db_schema() -> str: ...
+
+@mcp.tool()
+def query_database(sql_query: str) -> str: ...
+
+@mcp.tool()
+def run_python(code: str) -> str: ...
+
+@mcp.tool()
+def web_search(query: str) -> str: ...
+```
+* **Invariants**:
+    1. `sys.stdout` is strictly reserved for JSON-RPC 2.0 frames (ADR-0013).
+    2. All diagnostic, trace, and telemetry logging must be directed to `sys.stderr`.
+    3. elational schema must be served strictly as an MCP resource (`schema://main`).
+
+### COMP-05: Docker Container Sandbox Runner
+* **Target File:** src/sandbox/docker_runner.py
+* **Public Interface:**
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class ExecutionResult:
+    stdout: str
+    stderr: str
+    exit_code: int
+    duration_ms: float
+    timed_out: bool
+
+class DockerPythonSandbox:
+    def __init__(self, image: str = "python:3.11-slim", memory_limit: str = "256m", cpu_quota: float = 1.0, timeout_seconds: int = 5) -> None: ...
+    def execute_code(self, script_contents: str) -> ExecutionResult: ...
+```
+* **Invariants**:
+    1. Containers must run with `network_mode="none"`, `read_only=True`, and temporary scratch space limited to `tmpfs={"/tmp": "rw,size=16m"}`.
+    2. Ephemeral destruction must execute in `finally blocks` via `container.remove(force=True)`.
+    3. Hard timeout enforcement capped at 5.0 seconds.
+
+### COMP-06: Relational Database Access Engine
+* **Target File:** src/tools/database.py
+* **Public Interface:**
+```python
+from typing import List, Dict, Any
+
+class DatabaseEngine:
+    def __init__(self, db_path: str = "company_metrics.db") -> None: ...
+    def initialize_database(self) -> None: ...
+    def get_schema(self) -> str: ...
+    def execute_query(self, sql_query: str) -> List[Dict[str, Any]]: ...
+```
+* **Invariants**:
+    1. Physical connections must open in URI read-only mode (`file:...mode=ro`).
+    2. The SQLite engine must register a C-level authorizer callback denying all mutation actions outside `SQLITE_SELECT`, `SQLITE_READ`, and `SQLITE_FUNCTION` (ADR-0014).
+
+### COMP-07: Resilient Multi-Provider Search Engine
+* **Target File:** src/tools/search.py
+* **Public Interface:**
+```python
+from typing import List, Literal, Optional
+from pydantic import BaseModel
+
+class SearchResultItem(BaseModel):
+    title: str
+    snippet: str
+    source_url: str
+
+class UnifiedSearchResponse(BaseModel):
+    provider_used: Literal["DuckDuckGo", "Tavily", "BraveSearch", "Exhausted"]
+    query: str
+    results: List[SearchResultItem]
+    def to_context_string(self) -> str: ...
+
+class ResilientSearchEngine:
+    def __init__(self, tavily_api_key: Optional[str] = None, brave_api_key: Optional[str] = None, timeout_seconds: float = 4.0) -> None: ...
+    def search(self, query: str, max_results: int = 3) -> UnifiedSearchResponse: ...
+```
+* **Invariants**:
+    1. Strict cascade execution: DuckDuckGo → Tavily → Brave Search.
+    2. If all tiers fail, returns `UnifiedSearchResponse(provider_used="Exhausted", results=[])` without raising an unhandled exception.
+
+### COMP-08: Structured Telemetry & Cost Accounting Engine
+* **Target File:** src/telemetry/logger.py & src/telemetry/cost.py
+* **Public Interface:**
+```python
+from typing import Any, Dict, Literal
+from pydantic import BaseModel
+
+class TelemetryMetrics(BaseModel):
+    latency_ms: float
+    input_tokens: int
+    output_tokens: int
+    tokens_per_second: float
+    shadow_cost_usd: float
+
+class TelemetryEvent(BaseModel):
+    timestamp: str
+    session_id: str
+    event_type: Literal["llm_completion", "tool_executed", "circuit_break", "force_end", "security_violation"]
+    node: str
+    metrics: TelemetryMetrics
+    payload: Dict[str, Any]
+
+class StructuredLogger:
+    @staticmethod
+    def emit(event: TelemetryEvent) -> None: ...
+```
+* **Invariants:**
+    1. Events must be serialized as single-line JSON and emitted strictly to `sys.stderr` (ADR-0013).
+    2. Dual accounting tracking real compute metrics and shadow commercial API costs.
+
+---
+
+## 4. Git Commit and Tagging Instructions
+
+[Certain] Now that the three master governance files have been updated with complete technical prose, commit the documentation updates and apply the Phase 1 milestone tag:
+
+```bash
+# 1. Stage the updated governance specifications
+git add HANDOVER.md PRD_V1.md SPEC_V1.md
+
+# 2. Commit the documentation updates
+git commit -m "docs: synchronize PRD, SPEC, and HANDOVER with Phase 1 runtime architecture"
+
+# 3. Create the annotated Phase 1 git milestone tag
+git tag -a v0.1.0-phase1 -m "Phase 1 Complete: Validated SQLite URI ro, Docker sandbox SLA, search cascade, and FastMCP"
+
+# 4. Verify tag creation
+git tag -n

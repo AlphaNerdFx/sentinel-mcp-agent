@@ -10,21 +10,21 @@
 
 *Objective: Prove that local hardware, container runtimes, and local model engines are operational before writing application code.*
 
-- [x] **Task 0.1: Verify CUDA & VRAM Budget Allocation**
-  - [x] Standalone verification script (`scripts/check_env.py`) implemented with `nvidia-ml-py` and CLI fallback (ADR-12).
-  - [x] *Acceptance Criteria Met:* Verified 1,842 MB free VRAM with model warm-loaded (>= 1,000 MB unallocated headroom constraint satisfied) [Certain].
-- [x] **Task 0.2: Local Model & Embedder Provisioning**
-  - [x] Provisioned `qwen2.5:7b-instruct-q4_K_M` and `nomic-embed-text:v1.5` on local Ollama service.
-  - [x] Validated dual-model concurrency configuration and warm single-token ping < 2.0s via `keep_alive: -1` (ADR-10).
-  - [x] *Acceptance Criteria Met:* Combined weights loaded in VRAM within allocation boundaries [Certain].
-- [x] **Task 0.3: Docker Daemon Socket Permission Verification**
-  - [x] Implemented Python SDK socket verification script (`scripts/test_docker_socket.py`).
-  - [x] Verified non-root access to `/var/run/docker.sock` and enforced COMP-05 constraints (`network_mode="none"`, `mem_limit="256m"`, `tmpfs`).
-  - [x] *Acceptance Criteria Met:* Verified deterministic Linux OOM-killer termination with exit code 137 [Certain].
-- [x] **Task 0.4: Dependency Manifest & Virtual Environment**
-  - [x] Created Python 3.11 isolated virtual environment.
-  - [x] Configured PEP 621 `pyproject.toml` and compiled deterministic `requirements.lock` via `pip-tools`.
-  - [x] Added `langchain-mcp-adapters` for stdio JSON-RPC client integration (ADR-11).
+- [X] **Task 0.1: Verify CUDA & VRAM Budget Allocation**
+  - [X] Standalone verification script (`scripts/check_env.py`) implemented with `nvidia-ml-py` and CLI fallback (ADR-12).
+  - [X] *Acceptance Criteria Met:* Verified 1,842 MB free VRAM with model warm-loaded (>= 1,000 MB unallocated headroom constraint satisfied) [Certain].
+- [X] **Task 0.2: Local Model & Embedder Provisioning**
+  - [X] Provisioned `qwen2.5:7b-instruct-q4_K_M` and `nomic-embed-text:v1.5` on local Ollama service.
+  - [X] Validated dual-model concurrency configuration and warm single-token ping < 2.0s via `keep_alive: -1` (ADR-10).
+  - [X] *Acceptance Criteria Met:* Combined weights loaded in VRAM within allocation boundaries [Certain].
+- [X] **Task 0.3: Docker Daemon Socket Permission Verification**
+  - [X] Implemented Python SDK socket verification script (`scripts/test_docker_socket.py`).
+  - [X] Verified non-root access to `/var/run/docker.sock` and enforced COMP-05 constraints (`network_mode="none"`, `mem_limit="256m"`, `tmpfs`).
+  - [X] *Acceptance Criteria Met:* Verified deterministic Linux OOM-killer termination with exit code 137 [Certain].
+- [X] **Task 0.4: Dependency Manifest & Virtual Environment**
+  - [X] Created Python 3.11 isolated virtual environment.
+  - [X] Configured PEP 621 `pyproject.toml` and compiled deterministic `requirements.lock` via `pip-tools`.
+  - [X] Added `langchain-mcp-adapters` for stdio JSON-RPC client integration (ADR-11).
 
 ---
 
@@ -32,29 +32,29 @@
 
 *Objective: Implement and unit-test all MCP tools, resources, and sandboxes in complete isolation from the agent.*
 
-- [ ] **Task 1.1: Containerized Code Execution Sandbox (`src/sandbox/docker_runner.py`)**
-  - [ ] Implement `DockerPythonSandbox` class wrapping the Docker Engine API.
-  - [ ] Enforce security constraints: `--network none`, `--memory 256m`, `--cpus 1.0`, `--read-only`, and `--tmpfs /tmp:rw,size=16m`.
-  - [ ] Implement 5-second wall-clock termination using container polling and force-kill (`container.kill()`).
-  - [ ] *Acceptance Criteria:* Unit test confirms that attempting an outbound HTTP request inside the sandbox fails immediately with a network error [Certain].
-- [ ] **Task 1.2: Relational Database & Read-Only SQLite Engine (`src/tools/database.py`)**
-  - [ ] Implement database initialization script seeding `company_metrics.db` with sample revenue records.
-  - [ ] Implement query function using SQLite URI read-only mode (`file:company_metrics.db?mode=ro`).
-  - [ ] Implement SQL validation gate: reject queries containing `DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`, or `TRUNCATE`.
-  - [ ] *Acceptance Criteria:* Executing `DROP TABLE product_revenue` returns a `Security Violation` error string without touching the database file [Certain].
-- [ ] **Task 1.3: Resilient Multi-Provider Search Engine (`src/tools/search.py`)**
-  - [ ] Define Pydantic models: `SearchResultItem` and `UnifiedSearchResponse`.
-  - [ ] Implement `ResilientSearchEngine` with Chain of Responsibility cascade:
+- [X] **Task 1.1: Containerized Code Execution Sandbox (`src/sandbox/docker_runner.py`)**
+  - [X] Implement `DockerPythonSandbox` class wrapping the Docker Engine API.
+  - [X] Enforce security constraints: `--network none`, `--memory 256m`, `--cpus 1.0`, `--read-only`, and `--tmpfs /tmp:rw,size=16m`.
+  - [X] Implement 5-second wall-clock termination using container polling and force-kill (`container.kill()`).
+  - [X] *Acceptance Criteria:* Unit test confirms that attempting an outbound HTTP request inside the sandbox fails immediately with a network error [Certain].
+- [X] **Task 1.2: Relational Database & Read-Only SQLite Engine (`src/tools/database.py`)**
+  - [X] Implement database initialization script seeding `company_metrics.db` with sample revenue records.
+  - [X] Implement query function using SQLite URI read-only mode (`file:company_metrics.db?mode=ro`).
+  - [X] Implement SQL validation gate: reject queries containing `DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`, or `TRUNCATE`.
+  - [X] *Acceptance Criteria:* Executing `DROP TABLE product_revenue` returns a `Security Violation` error string without touching the database file [Certain].
+- [X] **Task 1.3: Resilient Multi-Provider Search Engine (`src/tools/search.py`)**
+  - [X] Define Pydantic models: `SearchResultItem` and `UnifiedSearchResponse`.
+  - [X] Implement `ResilientSearchEngine` with Chain of Responsibility cascade:
     1. Primary: DuckDuckGo (zero-key).
     2. Secondary: Tavily Search (reads `TAVILY_API_KEY`).
     3. Tertiary: Brave Search (reads `BRAVE_API_KEY`).
-  - [ ] Handle exhaustion gracefully: return empty list with `provider_used="Exhausted"` instead of raising unhandled exceptions.
-  - [ ] *Acceptance Criteria:* Simulating a rate-limit error (HTTP 429) on DuckDuckGo automatically cascades execution to Tavily and returns normalized results [Certain].
-- [ ] **Task 1.4: FastMCP Tool Server Packaging (`src/server.py`)**
-  - [ ] Register `web_search`, `query_database`, and `run_python` using `@mcp.tool()` decorators.
-  - [ ] Register table schema as an MCP Resource using `@mcp.resource("schema://main")`.
-  - [ ] Configure server entry point to serve over standard I/O (`transport="stdio"`).
-  - [ ] *Acceptance Criteria:* Running `python src/server.py` waits for standard input and responds correctly to JSON-RPC initialization pings [Certain].
+  - [X] Handle exhaustion gracefully: return empty list with `provider_used="Exhausted"` instead of raising unhandled exceptions.
+  - [X] *Acceptance Criteria:* Simulating a rate-limit error (HTTP 429) on DuckDuckGo automatically cascades execution to Tavily and returns normalized results [Certain].
+- [X] **Task 1.4: FastMCP Tool Server Packaging (`src/server.py`)**
+  - [X] Register `web_search`, `query_database`, and `run_python` using `@mcp.tool()` decorators.
+  - [X] Register table schema as an MCP Resource using `@mcp.resource("schema://main")`.
+  - [X] Configure server entry point to serve over standard I/O (`transport="stdio"`).
+  - [X] *Acceptance Criteria:* Running `python src/server.py` waits for standard input and responds correctly to JSON-RPC initialization pings [Certain].
 
 ---
 

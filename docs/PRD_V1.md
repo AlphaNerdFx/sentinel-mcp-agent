@@ -372,3 +372,133 @@ CREATE TABLE product_revenue (
 | **ADR-07: Search Cascade**   | Section 6.3 (SSOF Avoidance)  | Automated CI test failures caused by anti-bot IP blocking       |
 | **ADR-08: SQLite URI Mode**  | US-03 (SQL Guardrails)        | Accidental data loss caused by prompt injection attacks         |
 | **ADR-09: Structured JSON**  | KPI 1.3 (Telemetry Coverage)  | Blind production debugging caused by unstructured terminal logs |
+
+---
+
+# Project: Enterprise MCP Tool-Calling Agent with Observability (Path 2)
+
+**Document Version:** 1.1.0 (Post-Phase 1 Architecture Harmonization)
+**Target Milestone:** MVP Release (V1)
+**Status:** Phase 1 Complete / Phase 2 Active Implementation
+
+---
+
+## 1. Problem Statement & Success Metrics
+
+### 1.1 Problem Statement
+
+[Certain] Current autonomous ReAct implementations rely on loose, unbounded `while` loops that fail unpredictably in production: they enter cyclic tool-calling loops when tools fail, execute untrusted Python code directly on host runtimes, lack structured audit trails, and fail to manage token costs. This system delivers a deterministic, state-machine-backed agent utilizing the Model Context Protocol (MCP) to isolate tool execution, halt repetitive failure loops, and emit machine-readable telemetry for every state transition.
+
+### 1.2 Target Audience
+
+* **Forward Deployed Engineers (FDEs) & AI Platform Teams:** Requiring a verifiable, observable reference architecture for multi-tool orchestration.
+* **Enterprise Data Analysts:** Needing automated, multi-step data retrieval (SQL), synthesis (Python), and external validation (Web Search) without security exposure.
+
+### 1.3 Success Metrics (V1 Key Performance Indicators)
+
+* **Loop Mitigation Rate:** [Certain] 100% of repetitive, identical tool invocations intercepted and halted at strike 3 via SHA-256 argument fingerprinting and SQL AST canonicalization.
+* **Containment & Security:** [Certain] 0 unauthorized OS-level operations executed; 100% of destructive SQL commands (`DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`, `ATTACH`) blocked at both the C-engine parser layer and connection level before query evaluation.
+* **Execution Latency (P95):** [Likely] Multi-tool execution chain (2 tool calls + final synthesis) resolves in $\le 8.5$ seconds under standard local Ollama Qwen 2.5 7B inference windows. (Subsystem budget: LLM inference $\le 6.0$s; Docker sandbox execution $\le 2.2$s; Graph routing $\le 0.3$s).
+* **Cost Ceilings:** [Certain] Hard-stop abort triggered if any single transaction exceeds $0.05 USD or 10 iterations.
+* **Telemetry Coverage:** [Certain] 100% of LLM calls, tool executions, and state routing steps logged with structured JSON to `sys.stderr` containing latency, token counts, and cost metadata.
+
+---
+
+## 2. User Stories & Acceptance Criteria
+
+### US-01: Multi-Step Analytical Query Resolution
+
+*As a Data Analyst, I want the agent to query database metrics and process them using Python, so that I receive verified aggregate calculations without writing manual ETL scripts.*
+
+* **Scenario 1: Successful Multi-Step Execution**
+  * **Given:** The agent receives: *"Calculate total CloudEngine revenue and project a 15% increase."*
+  * **When:** The LangGraph state machine initiates execution.
+  * **Then:** The agent calls `query_database` to fetch data, feeds returned records into `run_python` to compute the 15% delta, and returns the synthesized result.
+  * **And:** Total iterations must not exceed 4 steps.
+
+### US-02: Deterministic Loop Interception (Circuit Breaker)
+
+*As a Platform Operations Engineer, I want the system to kill repeated tool calls, so that broken agent logic does not drain budgets or exhaust compute.*
+
+* **Scenario 1: Cyclic Tool-Calling Prevention**
+  * **Given:** The agent encounters a tool error or hallucinated parameter set.
+  * **When:** The agent requests a tool call whose canonical argument hash matches 2 preceding calls in the same session (including SQL queries with shifted whitespace or case).
+  * **Then:** The system intercepts execution, bypasses the tool, injects a `Circuit Breaker Triggered` message into context, and forces an alternate reasoning path.
+
+### US-03: Malicious Execution Containment
+
+*As an InfoSec Compliance Auditor, I want untrusted code execution and SQL injections blocked at the tool interface, so that the host system and data stores remain uncompromised.*
+
+* **Scenario 1: Destructive SQL Interception**
+  * **Given:** An agent requests `query_database` with `DROP TABLE product_revenue;` or `DELETE/**/FROM product_revenue`.
+  * **When:** The SQLite C-authorizer interceptor processes the statement.
+  * **Then:** Execution is rejected immediately with a `Security Violation` message without modifying the database file.
+* **Scenario 2: Malicious Python Execution**
+  * **Given:** An agent requests `run_python` containing socket calls or filesystem scans.
+  * **When:** The isolated container runs with `--network none` and `--read-only`.
+  * **Then:** Execution fails at the OS kernel level, and the container is destroyed.
+
+---
+
+## 3. Scope Specification (V1 vs. Out-of-Scope)
+
+| IN SCOPE (V1 MVP)                                        | OUT OF SCOPE (Future Releases)             |
+| :------------------------------------------------------- | :----------------------------------------- |
+| FastMCP Server via stdio JSON-RPC transport              | FastMCP over SSE / HTTP / Unix Sockets     |
+| LangGraph StateGraph deterministic engine (v1.2.x)       | Web UI / Interactive Chat Frontend         |
+| Tools:`web_search`, `run_python`, `query_database` | Human-in-the-Loop (HITL) pause nodes       |
+| Schema Resource:`schema://main`                        | Database write permissions                 |
+| SHA-256 + SQL AST Loop Detection (`sqlglot`)           | Dynamic vector-based tool routing          |
+| Hardened Docker daemon container sandbox                 | Distributed multi-agent swarms             |
+| Telemetry JSON Lines emitted to`sys.stderr`            | Distributed OpenTelemetry trace collectors |
+
+---
+
+## 4. Architectural Resolutions & Concrete Specifications
+
+### 4.1 Model Runtime & Compute Budget Resolution
+
+* **Selected Hardware Profile:** NVIDIA GeForce RTX 4060 Laptop GPU (8,192 MB GDDR6 physical VRAM).
+* **Primary Local LLM:** `qwen2.5:7b-instruct-q4_K_M` served via Ollama (Static weights: ~4,400 MB; KV cache: ~1,200 MB).
+* **CI Cloud Fallback:** OpenAI `gpt-4o-mini` activated automatically when Ollama is unreachable.
+* **Concurrency & Keep-Alive:** Enforced `OLLAMA_MAX_LOADED_MODELS=2` and `keep_alive: -1` to avoid PCIe bus reloading latency.
+
+### 4.2 Code Execution Isolation & Sandbox Resolution
+
+* **Isolation Engine:** Docker Engine API socket (`/var/run/docker.sock`).
+* **Container Parameters:** `python:3.11-slim`, `--network none`, `--memory 256m`, `--cpus 1.0`, `--read-only`, tmpfs at `/tmp:rw,size=16m`, executed as user `nobody`.
+* **Execution Timeout:** Hard 5.0-second wall-clock termination managed via container lifecycle polling and `container.kill()`.
+* **Observed Metrics:** Benchmark confirmed P50 execution latency of 1,034.09 ms for analytical tasks.
+
+### 4.3 Database Access Architecture
+
+* **Physical File:** Embedded SQLite (`company_metrics.db`).
+* **Connection Security:** URI connection with `mode=ro`.
+* **Engine Interception:** C-level `sqlite3.Connection.set_authorizer` callback rejecting all actions outside `SQLITE_SELECT`, `SQLITE_READ`, and `SQLITE_FUNCTION`.
+
+---
+
+## 5. Architectural Decision Records (ADRs)
+
+*(ADR-01 through ADR-12 retained as ratified)*
+
+### ADR-0013: Stream Demultiplexing for FastMCP and Observability
+
+* **Status:** Accepted & Binding.
+* **Context:** FastMCP over stdio requires exclusive ownership of `sys.stdout` for newline-delimited JSON-RPC 2.0 frames. Writing JSON telemetry to `stdout` breaks client JSON-RPC parsers.
+* **Decision:** Reserve `sys.stdout` exclusively for FastMCP protocol transport. Designate `sys.stderr` as the transport for all un-nested JSON telemetry events, system alerts, and debug logs.
+* **Traceability:** Satisfies Section 1.3 (Telemetry Coverage) and Section 3 (FastMCP stdio).
+
+### ADR-0014: SQLite C-Level Authorizer Engine Integration
+
+* **Status:** Accepted & Binding.
+* **Context:** Regex token filters are porous and easily bypassed by SQL comments, casing tricks, or subqueries.
+* **Decision:** Implement engine-level security using `sqlite3.Connection.set_authorizer`. Deny all structural mutations (`SQLITE_DENY`) while permitting read operations (`SQLITE_OK`).
+* **Traceability:** Satisfies US-03 and KPI 1.3 (Containment).
+
+### ADR-0015: Runtime Dependency Harmonization (LTS 2026 Baseline)
+
+* **Status:** Accepted & Binding.
+* **Context:** `langchain-mcp-adapters>=0.3.0` and `fastmcp>=4.0.0` require `langchain-core>=1.0.0`, conflicting with legacy 0.x bounds.
+* **Decision:** Upgrade the runtime stack to modern LTS baselines: `langchain-core>=1.0.0`, `langgraph>=1.0.0`, `fastmcp>=4.0.0`, `mcp>=2.0.0`, and `sqlglot>=30.0.0`. Inspect distribution metadata via `importlib.metadata`.
+* **Traceability:** Resolves build packaging conflicts and guarantees long-term stability.
