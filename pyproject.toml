@@ -18,24 +18,27 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    # Core Protocol & Multi-Tool Orchestration
-    "mcp>=1.2.0",
-    "fastmcp>=0.4.1",
-    "langchain-mcp-adapters>=0.1.0",
-    "langgraph>=0.2.20",
-    "langchain-core>=0.3.15",
-    "langchain-openai>=0.2.5",
-    
+    # Core Protocol & Multi-Tool Orchestration (Modern 1.x / 4.x Stack)
+    "mcp>=2.0.0,<3.0.0",
+    "langgraph>=1.0.0,<2.0.0",
+    "langchain-core>=1.0.0,<2.0.0",
+    "langchain-mcp-adapters>=0.3.0,<0.4.0",
+    "fastmcp>=4.0.0,<5.0.0",
+    "langchain-openai>=0.3.0",
+
     # Data Modeling, Telemetry & Invariants
     "pydantic>=2.9.0",
-    
+
     # Isolation & Sandbox Runtimes
     "docker>=7.1.0",
-    
+
     # External Providers & Networking
     "duckduckgo-search>=6.3.0",
     "requests>=2.32.0",
-    
+
+    # SQL AST Parsing & Canonicalization
+    "sqlglot>=30.0.0,<=30.21.0",
+
     # Hardware Telemetry (ADR-12)
     "nvidia-ml-py>=12.560.30",
 ]
