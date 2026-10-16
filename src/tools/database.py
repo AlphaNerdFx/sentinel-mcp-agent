@@ -1,6 +1,6 @@
 """
 src/tools/database.py
-Relational Database Access Engine with C-Authorizer and Read-Only Connection Enforcement.
+Relational Database Access Engine with C-Authorizer, Self-Seeding, and Read-Only Connection Enforcement.
 Contract Reference: SPEC_V1.md COMP-06; PRD_V1.md ADR-0014, US-03.
 """
 
@@ -20,10 +20,48 @@ class SecurityViolationError(Exception):
 class DatabaseEngine:
     """
     [Certain] Low-level SQLite database access engine enforcing C-level security.
+    Auto-seeds schema and baseline revenue metrics if database file is missing.
     """
 
     def __init__(self, db_path: str = "company_metrics.db") -> None:
         self.db_path = db_path
+        if not os.path.exists(self.db_path):
+            self.initialize_database()
+
+    def initialize_database(self) -> None:
+        """[Certain] Idempotently seeds embedded SQLite schema and records."""
+        db_dir = os.path.dirname(os.path.abspath(self.db_path))
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS product_revenue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_name TEXT NOT NULL,
+                quarter TEXT NOT NULL,
+                revenue REAL NOT NULL
+            );
+        """)
+        cursor.execute("SELECT COUNT(*) FROM product_revenue;")
+        count = cursor.fetchone()[0]
+        if count == 0:
+            cursor.executemany(
+                """
+                INSERT INTO product_revenue (product_name, quarter, revenue)
+                VALUES (?, ?, ?);
+            """,
+                [
+                    ("CloudEngine", "Q1", 100000.0),
+                    ("CloudEngine", "Q2", 125000.0),
+                    ("CloudEngine", "Q3", 150000.0),
+                    ("DataPipeline", "Q1", 45000.0),
+                    ("DataPipeline", "Q2", 55000.0),
+                ],
+            )
+        conn.commit()
+        conn.close()
 
     def _authorizer_guard(
         self,
@@ -51,6 +89,9 @@ class DatabaseEngine:
         [Certain] Executes read-only query using URI ro mode and C-authorizer.
         Raises SecurityViolationError on unauthorized actions.
         """
+        if not os.path.exists(self.db_path):
+            self.initialize_database()
+
         normalized = sql_query.strip().lower()
         if "recursive" in normalized:
             raise SecurityViolationError(
@@ -77,6 +118,9 @@ class DatabaseEngine:
 
     def get_schema(self) -> str:
         """[Certain] Returns schema of product_revenue table."""
+        if not os.path.exists(self.db_path):
+            self.initialize_database()
+
         uri_path = f"file:{os.path.abspath(self.db_path)}?mode=ro"
         conn = sqlite3.connect(uri_path, uri=True, timeout=2.0)
         cursor = conn.cursor()
@@ -104,4 +148,4 @@ def query_database(query: str) -> List[Dict[str, Any]] | str:
     except SecurityViolationError as sec_err:
         return str(sec_err)
     except Exception as exc:
-        return f"Database Query Error: {exc}"
+        return f"Database Error: {exc}"
