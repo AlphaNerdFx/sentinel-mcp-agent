@@ -5,19 +5,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [0.4.0] - 2026-10-16 (Phase 4 Milestone: Automated Verification Suite & CI/CD Pipeline)
+
+### Added
+
+* **Automated CI/CD Pipeline (`.github/workflows/ci.yml`):** Implemented remote GitHub Actions workflow on Ubuntu runners with Docker service integration, executing full static analysis, unit test suites, stream demultiplexing checks, and end-to-end user story verification on every push and pull request.
+* **Hermetic Unit Test Suite (54 Tests across `tests/unit/`):**
+  * `tests/unit/agent/test_loop_detector.py`: 10 tests verifying commutative AST binary equality (`exp.EQ`, `exp.NEQ`), relational inversion (`exp.GT`, `exp.LT`), boolean conjunctions (`exp.And`), boolean disjunctions (`exp.Or`), whitespace/casing normalization, subqueries, and JSON parameter sorting (ADR-0016).
+  * `tests/unit/agent/test_model_adapter.py`: 5 tests verifying local Ollama daemon probes, cloud fallback to `gpt-4o-mini`, and transport deadline resolution (`MODEL_TIMEOUT=120.0s`).
+  * `tests/unit/agent/test_state_graph.py`: 5 tests verifying the 3-node FSM topology (`agent`, `tools`, `force_end`), conditional edge routing via `route_agent_output`, and the 10-iteration ceiling cutoff (ADR-0001).
+  * `tests/unit/agent/test_telemetry_schema.py`: 4 tests validating single-line JSON emission strictly to `sys.stderr`, RFC 3339 timestamp parsing, shadow cloud billing calculation ($0.15/$0.60 per 1M tokens), and guaranteed `session_id` context propagation (ADR-0013, ADR-0009).
+  * `tests/unit/tools/test_mcp_server.py`: 6 tests validating out-of-process FastMCP server execution over stdio, tool dispatch, and DDL resource registry (`schema://main`).
+  * `tests/unit/tools/test_sandbox_security.py`: 6 tests validating Docker container cgroup memory limits (256MB), network blocking (`--network none`), 5.0-second timeout enforcement, and Linux VFS kernel write denial (`EROFS` 30 / `EACCES` 13) (ADR-0003).
+  * `tests/unit/tools/test_search_fallback.py`: 5 tests validating Chain-of-Responsibility fallback across DuckDuckGo, Tavily, and Brave Search, and graceful degradation to `Exhausted` (ADR-0007).
+  * `tests/unit/tools/test_sql_guardrails.py`: 13 tests validating SQLite C-level authorizer denial of DDL (`DROP`), DML (`DELETE`, `UPDATE`), system PRAGMAs, and database smuggling (`ATTACH`) (ADR-0014).
+* **End-to-End User Story Integration Suite (4 Tests across `tests/e2e/`):**
+  * `test_us01_multistep_query.py`: Verifies US-01 multi-step analytical execution (SQL data fetch $\rightarrow$ Python 15% projection $\rightarrow$ Synthesis in $\le 4$ iterations).
+  * `test_us02_loop_interception.py`: Verifies US-02 circuit-breaker Strike 3 interception, synthetic `ToolMessage` injection, and 100% `tool_call_id` wire compliance without dropping calls (ADR-0018).
+  * `test_us03_security_containment.py`: Verifies US-03 state-machine containment of destructive SQL commands and container network exfiltration attempts.
+* **Production Automation Makefile:** Implemented comprehensive `Makefile` featuring `make ci`, `make lint`, `make lint-fix`, `make test-unit`, `make test-e2e`, and `make clean`.
+* **Repository Normalization (`.gitattributes`):** Locked LF line-ending normalization across all Python, shell, toml, and markdown files to prevent Windows CRLF (`^M`) corruption in WSL2 and CI.
+
+### Changed
+
+* **Repository Re-Branding:** Crystallized official project repository name as `sentinel-mcp-agent` to reflect safety, containment, and circuit-breaking capabilities.
+* **ADR Numbering Normalization:** Formally mapped and standardized all Architectural Decision Records into unified 4-digit notation (`ADR-0001` through `ADR-0019`) across all documentation.
+* **Strict Static Typing Certification:** Achieved 100% clean static type checking across all 17 source modules under Mypy, resolving dynamic schema assignment narrowing and AST node covariance.
+* **Relational Database Self-Seeding:** Updated `DatabaseEngine` in `src/tools/database.py` to auto-seed `company_metrics.db` if missing, guaranteeing hermetic execution on clean checkout environments.
+* **Search Cascade Credential Pre-Checks:** Hardened `ResilientSearchEngine.search()` to evaluate API key presence before invoking commercial tiers, preventing mock leakage in unit tests.
+* **Telemetry Session Defaults:** Enhanced `StructuredLogger` to guarantee `session_id` context propagation, eliminating un-indexed audit records.
+
+### Fixed
+
+* **AST In-Place Pointer Aliasing:** Fixed critical corruption bug in `src/agent/state.py` where in-place operand swapping caused child nodes to overwrite their sibling references (`WHERE 10 = id` $\rightarrow$ `WHERE id = id`). Migrated to `sqlglot.transform` visitor pattern.
+* **GNU Make Shell Word-Splitting (Error 127):** Fixed `/bin/bash: line 1: /mnt/c/DSC/Career/Projects/ReAct: No such file or directory` by replacing absolute `$VIRTUAL_ENV` expansions with the relative path `.venv/bin/python3`.
+* **Make Clipboard Separator Corruption:** Fixed `Makefile: *** missing separator` by authoring Makefiles programmatically with literal ASCII Tab (`0x09`) bytes.
+* **Remote Runner Missing Dependencies:** Resolved `No module named ruff` in GitHub Actions by compiling `requirements.lock` with `--extra=dev`.
+* **SQLite URI Read-Only Lockout:** Resolved `unable to open database file` under URI `mode=ro` by creating and seeding the database file before read-only descriptors are acquired.
+* **CPython Entrypoint `sys.path[0]` Inversion:** Fixed `ModuleNotFoundError: No module named 'src'` during direct script execution by exporting `PYTHONPATH := .` across Makefile recipes.
+* **Flake8-Bugbear B904 Chaining:** Added explicit `from err` and `from exc` chaining across database and sandbox drivers to preserve causal exception tracebacks.
+* **Pydantic `Optional` Import Shadowing:** Fixed `Value of type 'object' is not indexable` by importing `Optional` strictly from standard library `typing`.
+* **Uncompiled StateGraph Execution:** Fixed `AttributeError: 'StateGraph' object has no attribute 'ainvoke'` in E2E tests by calling `.compile()` on graph workflows before invocation.
+
+---
+
 ## [0.2.0] - 2026-10-13 (Phase 2 Milestone: State Machine Orchestration & Safety Guardrails)
 
 ### Added
 
 * **Deterministic ReAct State Machine (`COMP-01`):** Implemented asynchronous LangGraph workflow (`src/agent/graph.py`, `src/agent/nodes.py`) compiling `agent`, `tools`, and `force_end` nodes with Write-Ahead Logging persistence via `AsyncSqliteSaver` targeting `.agent_state.db` (ADR-0017).
 * **Native FastMCP Client Manager (`COMP-04 Client`):** Implemented `src/agent/mcp_client.py` using native `fastmcp.Client` and `StdioTransport` to spawn and manage child server processes over stdio. Dynamically synthesizes runtime Pydantic validation schemas via `pydantic.create_model()` to wrap MCP tools as LangChain `StructuredTool` instances (ADR-0019).
-* **Commutative SQL AST Fingerprinting (`COMP-03`):** Implemented `canonical_fingerprint()` in `src/agent/state.py` featuring an AST visitor (`_canonicalize_ast`) that recursively sorts commutative binary equality operands (`exp.EQ`, `exp.NEQ`). Guarantees identical SHA-256 signatures for queries with inverted predicate syntax (e.g., `1 = id` vs `id = 1`) (ADR-0016).
+* **Commutative SQL AST Fingerprinting (`COMP-03`):** Implemented `canonical_fingerprint()` in `src/agent/state.py` featuring an AST visitor (`_canonicalize_ast`) that recursively sorts commutative binary equality operands (`exp.EQ`, `exp.NEQ`) (ADR-0016).
 * **Atomic Tool Partition & Dispatch Node (`COMP-01` / `COMP-03`):** Implemented unified `tool_node` in `src/agent/nodes.py`. Partitions parallel calls into safe vs tripped, injects synthetic `ToolMessage` instances for calls with $\ge 3$ strikes, executes safe calls via MCP client, and guarantees 100% `tool_call_id` wire compliance without dropping sibling calls (ADR-0018).
 * **Physical Integration Test Harness:** Created `scripts/verify_phase2_live.py` validating end-to-end execution across local Ollama Qwen 2.5 7B, the out-of-process FastMCP server, and persistent SQLite checkpointing.
 
 ### Changed
 
-* **MCP Client Architecture (ADR-0019 Supersedes ADR-11):** Purged `langchain-mcp-adapters` from `pyproject.toml` and runtime codebase. Replaced third-party adapter with native `fastmcp.Client`, resolving upstream dependency deadlocks with FastMCP 4.x and MCP 2.x.
+* **MCP Client Architecture (ADR-0019 Supersedes ADR-0011):** Purged `langchain-mcp-adapters` from `pyproject.toml` and runtime codebase. Replaced third-party adapter with native `fastmcp.Client`, resolving upstream dependency deadlocks with FastMCP 4.x and MCP 2.x.
 * **State Schema Optimization:** Refactored `AgentState["tool_call_history"]` in `src/agent/state.py` from `List[str]` to `dict[str, int]` for $O(1)$ strike threshold tracking.
 * **Pure Asynchronous Closures:** Refactored `build_agent_workflow()` in `src/agent/graph.py` to bind node dependencies via explicit `async def` inner closures, preserving Python `CO_COROUTINE` reflection flags required by LangGraph.
 * **Inference Transport Deadline:** Configured `MODEL_TIMEOUT` environment resolution with a 120.0-second default in `src/agent/model_adapter.py` to prevent false-positive socket drops during GBNF grammar compilation and WSL2 TTFT latency.
@@ -59,12 +103,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * **Stdio Transport Stream Hygiene (ADR-0013):** Enforced stream demultiplexing across all subsystems: `sys.stdout` is reserved exclusively for FastMCP JSON-RPC 2.0 frames; all diagnostic logs, error tracebacks, and telemetry events route strictly to `sys.stderr`.
 * **Kernel-Level Sandboxing:** Enforced Linux namespace and cgroup boundaries inside Docker containers. Outbound network attempts fail at the kernel level (`Network is unreachable`), and memory allocation bombs trigger immediate terminations via exit code 137.
 
-### Performance & Benchmarks
-
-* **Docker Cold-Start Overhead:** Empirical benchmarking across 5 sequential analytical cycles confirmed a P50 execution latency of 1,034.09 ms (Max 1,164.54 ms).
-* **Timeout SLA Enforcement:** Verified hard-kill termination on infinite loops: scripts exceeding 5.0 seconds terminate with POSIX exit code 124.
-* **Teardown Latency Lag:** Discovered a 1,583.49ms teardown lag resulting from WSL2 socket IPC translation and synchronous container removal.
-
 ---
 
 ## [0.0.1] - 2026-10-08 (Phase 0 Milestone: Environment & Toolchain Verification)
@@ -76,7 +114,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 * PEP 621 packaging configuration in `pyproject.toml` and cryptographically locked `requirements.lock` via `pip-tools`.
 * POSIX automation `Makefile` for environment checking, dependency locking, and test runs.
 * Foundation architecture documentation: `PRD_V1.md`, `SPEC_V1.md`, `SECURITY.md`, `README.md`, `TODO.md`, and Apache 2.0 `LICENSE`.
-* Architectural Decision Records: ADR-10 (Ollama Multi-Model Residency) and ADR-12 (Resilient GPU Telemetry).
+* Architectural Decision Records: ADR-0010 (Ollama Multi-Model Residency) and ADR-0012 (Resilient GPU Telemetry).
 
 ### Fixed
 

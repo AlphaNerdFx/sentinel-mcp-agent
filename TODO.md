@@ -1,21 +1,20 @@
-# TODO.md: Enterprise MCP Tool-Calling Agent (V1 Release Roadmap)
+# TODO.md: Sentinel MCP Agent (V1 Release Roadmap)
 
-**Target Milestone:** Version 1.0.0 (Production Framework Stack)
-**Tracking PRD:** `PRD_V1.md`
-**Standard:** Forward Deployed Engineer (FDE) Portfolio Grade
+**Target Milestone:** Version 1.0.0 (Production Reference Stack)  
+**Tracking PRD:** `PRD_V1.md` (v1.3.0)  
+**Standard:** Forward Deployed Engineer (FDE) Portfolio Grade  
+**Current Status:** Phase 4 Signed Off (v0.4.0-phase4) | Phase 5 Active  
 
 ---
 
 ## Phase 0: Hardware Baseline & Environment Gate (Prerequisites)
 
-*Objective: Prove that local hardware, container runtimes, and local model engines are operational before writing application code.*
-
 - [X] **Task 0.1: Verify CUDA & VRAM Budget Allocation**
-  - [X] Standalone verification script (`scripts/check_env.py`) implemented with `nvidia-ml-py` and CLI fallback (ADR-12).
+  - [X] Standalone verification script (`scripts/check_env.py`) implemented with `nvidia-ml-py` and CLI fallback (ADR-0012).
   - [X] *Acceptance Criteria Met:* Verified 1,842 MB free VRAM with model warm-loaded (>= 1,000 MB unallocated headroom constraint satisfied) [Certain].
 - [X] **Task 0.2: Local Model & Embedder Provisioning**
   - [X] Provisioned `qwen2.5:7b-instruct-q4_K_M` and `nomic-embed-text:v1.5` on local Ollama service.
-  - [X] Validated dual-model concurrency configuration and warm single-token ping < 2.0s via `keep_alive: -1` (ADR-10).
+  - [X] Validated dual-model concurrency configuration and warm single-token ping < 2.0s via `keep_alive: -1` (ADR-0010).
   - [X] *Acceptance Criteria Met:* Combined weights loaded in VRAM within allocation boundaries [Certain].
 - [X] **Task 0.3: Docker Daemon Socket Permission Verification**
   - [X] Implemented Python SDK socket verification script (`scripts/test_docker_socket.py`).
@@ -24,13 +23,11 @@
 - [X] **Task 0.4: Dependency Manifest & Virtual Environment**
   - [X] Created Python 3.11 isolated virtual environment.
   - [X] Configured PEP 621 `pyproject.toml` and compiled deterministic `requirements.lock` via `pip-tools`.
-  - [X] Replaced legacy `langchain-mcp-adapters` with native FastMCP 4.x stdio client integration due to upstream MCP 2.x breaking changes (ADR-0019 supersedes ADR-11) [Certain].
+  - [X] Replaced legacy `langchain-mcp-adapters` with native FastMCP 4.x stdio client integration due to upstream MCP 2.x breaking changes (ADR-0019 supersedes ADR-0011) [Certain].
 
 ---
 
 ## Phase 1: Tool Engine & Isolation Primitives
-
-*Objective: Implement and unit-test all MCP tools, resources, and sandboxes in complete isolation from the agent.*
 
 - [X] **Task 1.1: Containerized Code Execution Sandbox (`src/sandbox/docker_runner.py`)**
   - [X] Implement `DockerPythonSandbox` class wrapping the Docker Engine API.
@@ -48,7 +45,7 @@
     1. Primary: DuckDuckGo (zero-key).
     2. Secondary: Tavily Search (reads `TAVILY_API_KEY`).
     3. Tertiary: Brave Search (reads `BRAVE_API_KEY`).
-  - [X] Handle exhaustion gracefully: return empty list with `provider_used="Exhausted"` instead of raising unhandled exceptions.
+  - [X] Handle exhaustion gracefully: return empty list with `provider_used="Exhausted"` instead of raising unhandled exceptions (ADR-0007).
   - [X] *Acceptance Criteria Met:* Simulating a rate-limit error (HTTP 429) on DuckDuckGo automatically cascades execution to Tavily and returns normalized results [Certain].
 - [X] **Task 1.4: FastMCP Tool Server Packaging (`src/server.py`)**
   - [X] Register `web_search`, `query_database`, and `run_python` using `@mcp.tool()` decorators.
@@ -61,41 +58,26 @@
 
 ## Phase 2: State Machine Orchestration & Safety Guardrails
 
-*Objective: Build the deterministic LangGraph engine, loop detection circuit breaker, and model provider adapters.*
-
 - [X] **Task 2.1: Model Provider Adapter (`src/agent/model_adapter.py`)**
   - [X] Implement `get_model()` factory returning a configured `ChatOpenAI` client.
-  - [X] Configure local path: point `base_url` to `http://localhost:11434/v1` with pinned model `qwen2.5:7b-instruct-q4_K_M` and configurable transport deadline (`MODEL_TIMEOUT=120.0`) (ADR-10).
+  - [X] Configure local path: point `base_url` to `http://localhost:11434/v1` with pinned model `qwen2.5:7b-instruct-q4_K_M` and transport deadline (`MODEL_TIMEOUT=120.0`) (ADR-0010).
   - [X] Configure CI fallback path: check for `OPENAI_API_KEY`; if present and Ollama is unreachable, point to `gpt-4o-mini`.
   - [X] Implement native FastMCP Client Manager (`src/agent/mcp_client.py`) using `fastmcp.Client` with dynamic Pydantic schema synthesis and `StructuredTool` adaptation (ADR-0019) [Certain].
 - [X] **Task 2.2: State Schema & Deduplication Engine (`src/agent/state.py`)**
   - [X] Define `AgentState` typed dictionary containing `messages`, `iteration_count`, `tool_call_history`, and `session_id`.
-  - [X] Implement domain-aware canonical SHA-256 fingerprinting function:
-    $$
-    \text{Hash} = \text{SHA256}(\text{tool\_name} + \text{":""} + \text{canonical\_payload}(\text{args}))
-    $$
-  - [X] Integrate `sqlglot` AST transpilation into `canonical_payload` with commutative binary equality sorting (`_canonicalize_ast`) (ADR-0015) [Certain].
-  - [X] *Acceptance Criteria Met:* Verified that `{"a": 1, "b": 2}` and `{"b": 2, "a": 1}` match, and `SELECT * FROM t WHERE a = 1` and `select * from t where 1 = a` match via commutative AST parsing [Certain].
+  - [X] Implement domain-aware canonical SHA-256 fingerprinting function using `sqlglot` AST traversal with commutative equality and boolean junction normalization (ADR-0016) [Certain].
 - [X] **Task 2.3: LangGraph Node Implementation (`src/agent/nodes.py`)**
   - [X] Implement `agent_node`: invokes LLM via non-streaming `ainvoke`, captures latency, extracts token metrics, and emits structured telemetry to `sys.stderr` [Certain].
-  - [X] Implement atomic `tool_node`: partitions parallel calls into safe vs tripped, injects synthetic `ToolMessage` instances for calls with >= 3 strikes, executes safe calls via MCP client, and guarantees 100% `tool_call_id` wire compliance (ADR-0017) [Certain].
+  - [X] Implement atomic `tool_node`: partitions parallel calls into safe vs tripped, injects synthetic `ToolMessage` instances for calls with >= 3 strikes, executes safe calls via MCP client, and guarantees 100% `tool_call_id` wire compliance (ADR-0018) [Certain].
   - [X] Implement `force_end_node`: reconciles dangling tool calls asynchronously before emitting terminal `AIMessage` upon reaching 10 iterations [Certain].
 - [X] **Task 2.4: StateGraph Assembly & Compilation (`src/agent/graph.py`)**
-  - [X] Initialize `StateGraph(AgentState)` with pure asynchronous closures (`run_agent`, `run_tools`, `run_force_end`) preserving Python `CO_COROUTINE` code object flags [Certain].
-  - [X] Add nodes: `agent`, `tools`, `force_end` [Certain].
-  - [X] Configure conditional edge router from `agent`:
-    - Route to `force_end` if `iteration_count >= 10`.
-    - Route to `tools` if model emits tool calls.
-    - Route to `END` if model emits response without tool calls.
-  - [X] Connect `tools` back to `agent`, and `force_end` to `END` [Certain].
-  - [X] Compile graph into executable runnable using `AsyncSqliteSaver` in WAL mode (`.agent_state.db`) (ADR-0016) [Certain].
-  - [X] *Acceptance Criteria Met:* Live trajectory verified via `scripts/verify_phase2_live.py` against local Ollama instance and out-of-process FastMCP server [Certain].
+  - [X] Initialize `StateGraph(AgentState)` with pure asynchronous closures preserving Python `CO_COROUTINE` flags [Certain].
+  - [X] Configure conditional edge router `route_agent_output`: enforce iteration ceiling at 10 turns.
+  - [X] Compile graph into executable runnable using `AsyncSqliteSaver` in WAL mode (`.agent_state.db`) (ADR-0017) [Certain].
 
 ---
 
 ## Phase 3: Structured Telemetry & Observability Layer
-
-*Objective: Verify machine-readable JSON logging to stderr with dual-metric cost accounting.*
 
 - [X] **Task 3.1: Structured Telemetry Logger (`src/telemetry/logger.py`)**
   - [X] Implement `StructuredLogger.log_event(event_type, node, metrics, payload)`.
@@ -104,46 +86,55 @@
 - [X] **Task 3.2: Dual-Metric Cost Calculation Engine (`src/telemetry/cost.py`)**
   - [X] Define model pricing table ($0.15 / 1M prompt tokens, $0.60 / 1M completion tokens).
   - [X] Implement shadow cost calculator converting input/output tokens into simulated USD spend.
-  - [X] Track actual hardware execution metrics: latency in milliseconds and tokens-per-second generation rate.
-  - [X] *Acceptance Criteria Met:* Every LLM completion event emits a valid JSON line containing both token counts and estimated dollar costs [Certain].
+  - [X] Track actual hardware execution metrics: latency in milliseconds and tokens-per-second generation rate [Certain].
 
 ---
 
 ## Phase 4: Verification Suite & CI/CD Pipeline
 
-*Objective: Build automated tests proving all PRD acceptance criteria and security bounds are met.*
-
 - [X] **Task 4.1: Unit Test Suite (`tests/unit/`)**
-  - [X] `test_sandbox_security.py`: Verifies network block, 5s timeout kill, and 256MB RAM exhaustion handling (`ExitCode 137`).
-  - [X] `test_sql_guardrails.py`: Verifies that destructive queries (`DROP`, `DELETE`, `UPDATE`) are rejected without database modification via C-authorizer (ADR-0014).
-  - [X] `test_search_fallback.py`: Mocks DuckDuckGo failure and verifies automatic fallback to Tavily.
-  - [X] `test_loop_detector.py`: Verifies that commutative AST fingerprinting catches duplicate calls regardless of key ordering, casing, or binary operator operand inversion (`1 = id` vs `id = 1`) (ADR-0015).
-  - [X] `test_telemetry_schema.py`: Verifies that logs emit to `sys.stderr` and conform to the PRD Section 4.3 JSON schema.
+  - [X] `tests/unit/tools/test_sandbox_security.py`: Verifies network block, 5s timeout kill, 256MB RAM OOM termination (`ExitCode 137`), and kernel VFS write refusal (`EROFS`/`EACCES`).
+  - [X] `tests/unit/tools/test_sql_guardrails.py`: Verifies C-authorizer rejects DDL (`DROP`), DML (`DELETE`, `UPDATE`), system PRAGMAs, and database smuggling (`ATTACH`) at the engine layer (ADR-0014).
+  - [X] `tests/unit/tools/test_search_fallback.py`: Verifies 3-tier cascade logic and unconfigured key bypassing without external network calls (ADR-0007).
+  - [X] `tests/unit/tools/test_mcp_server.py`: Verifies FastMCP primitives over stdio and resource registration.
+  - [X] `tests/unit/agent/test_model_adapter.py`: Verifies Ollama probe detection, gpt-4o-mini cloud fallback, and 120s timeout parsing.
+  - [X] `tests/unit/agent/test_state_graph.py`: Verifies 3-node topology, iteration ceiling cutoff at 10 turns, and dangling tool call reconciliation.
+  - [X] `tests/unit/agent/test_loop_detector.py`: Verifies commutative AST equality, relational inversion, boolean `AND`/`OR` sorting, and JSON key ordering (ADR-0016).
+  - [X] `tests/unit/agent/test_telemetry_schema.py`: Verifies JSON lines emission strictly to `sys.stderr` with guaranteed `session_id` propagation.
+  - [X] *Acceptance Criteria Met:* All 54 unit tests pass in 9.27 seconds on GitHub Actions hosted runners [Certain].
+
 - [X] **Task 4.2: End-to-End User Story Tests (`tests/e2e/`)**
-  - [X] `test_us01_multistep_query.py`: Verifies that the agent queries SQL for revenue data, passes it to Python to compute a 15% increase, and returns the final answer in $\le 4$ steps.
-  - [X] `test_us02_loop_interception.py`: Injects a failing tool scenario and verifies the circuit breaker halts execution at strike 3 without reaching the 10-step cap or dropping `tool_call_id`s (ADR-0017).
-  - [X] `test_us03_security_containment.py`: Prompts the agent to run dangerous code (e.g., file deletion) and verifies the attempt is blocked.
-- [X] **Task 4.3: GitHub Actions CI Workflow (`.github/workflows/ci.yml`)**
-  - [ ] Configure Ubuntu runner with Docker service enabled.
-  - [ ] Add steps: checkout code, setup Python 3.11, install dependencies strictly from `requirements.lock` via `pip-sync`.
-  - [ ] Configure test execution: run hermetic unit tests with mocked Ollama/cloud providers; run e2e tests gated by environment secrets.
-  - [ ] *Acceptance Criteria:* Pull requests trigger automated test runs and must pass all unit tests before merging [Certain].
+  - [X] `test_us01_multistep_query.py`: Verifies multi-step analytical execution (SQL $\rightarrow$ Python 15% projection $\rightarrow$ Synthesis in $\le 4$ steps).
+  - [X] `test_us02_loop_interception.py`: Verifies repetitive tool invocations halt at Strike 3 with synthetic `ToolMessage` without wire protocol drops (ADR-0018).
+  - [X] `test_us03_security_containment.py`: Verifies that destructive SQL (`DROP TABLE`) and socket scans (`port 53`) are intercepted through the LangGraph state machine.
+  - [X] *Acceptance Criteria Met:* All 4 E2E user story integration tests pass hermetically [Certain].
+
+- [X] **Task 4.3: CI/CD Pipeline Automation & Toolchain Hardening**
+  - [X] Configure `.github/workflows/ci.yml` running on Ubuntu runners with pre-installed Docker services.
+  - [X] Lock dependencies via `requirements.lock` including development extras (`--extra=dev`).
+  - [X] Configure automation `Makefile` with whitespace-immune relative paths and `.gitattributes` LF line-ending normalization.
+  - [X] Enforce strict static type checking via Mypy (17/17 source files passing with 0 errors).
+  - [X] Enforce style formatting and linting via Ruff (28/28 files clean).
+  - [X] Implement automated FastMCP stdio stream purity verification (zero bytes on `stdout`).
+  - [X] Implement SQLite database self-seeding (`company_metrics.db`) to guarantee hermetic execution on clean checkouts.
+  - [X] *Acceptance Criteria Met:* Remote GitHub Actions workflow executes `make ci` and turns 100% green on push [Certain].
 
 ---
 
-## Phase 5: Production Packaging & Portfolio Documentation
-
-*Objective: Finalize the repository for review by hiring managers and engineering leads.*
+## Phase 5: Production Packaging & Portfolio Documentation (ACTIVE)
 
 - [ ] **Task 5.1: Zero-Config CLI Entry Point (`main.py`)**
-  - [ ] Build interactive CLI interface accepting user prompts via terminal arguments or interactive REPL (`--interactive`).
-  - [ ] Add `--verbose` flag to toggle display of real-time structured telemetry logs from `sys.stderr`.
-  - [ ] Support `--session-id` argument to resume persistent conversations via SQLite WAL checkpointer (ADR-0016).
-- [ ] **Task 5.2: Production Documentation (`README.md`)**
-  - [ ] Document project architecture, design trade-offs, and setup steps.
-  - [ ] Include ASCII architecture diagrams illustrating data flow and ADR-0013 stream demultiplexing.
-  - [ ] Document VRAM sizing calculations and Docker socket setup for Ubuntu, macOS, and Windows/WSL2.
+  - [ ] Implement command-line interface supporting positional prompt arguments: `python main.py "Calculate Q3 revenue"`.
+  - [ ] Support interactive multi-turn REPL mode via `--interactive` flag.
+  - [ ] Support persistent conversational session resumption via `--session-id <UUID>` targeting `.agent_state.db` (ADR-0017).
+  - [ ] Support `--verbose` flag toggling display of real-time structured telemetry events from `sys.stderr`.
+  - [ ] Implement deterministic POSIX exit codes: `0` (Success), `1` (Runtime Fault), `2` (Security Breach), `3` (Circuit Breaker Interception / Iteration Ceiling) (COMP-09).
+- [ ] **Task 5.2: Enterprise Production Documentation (`README.md`)**
+  - [ ] Author portfolio-grade architectural documentation with system design diagrams.
+  - [ ] Document stream demultiplexing architecture (ADR-0013) with ASCII data flow illustrations.
+  - [ ] Document cgroups v2 container isolation and C-authorizer database security models.
+  - [ ] Include reproducible setup instructions for Ubuntu, macOS, and Windows/WSL2.
 - [ ] **Task 5.3: Verification of KPIs Against Acceptance Criteria**
-  - [ ] Measure P95 multi-tool execution latency; verify $\le 8.5\text{ seconds}$ on standard warm local runs [Likely].
+  - [ ] Measure P95 multi-tool execution latency; verify $\le 8.5\text{ seconds}$ on warm local Ollama Qwen 2.5 7B runs.
   - [ ] Verify 100% loop break rate across test suites.
-  - [ ] Verify 0 unauthorized host OS operations across all tests.
+  - [ ] Verify 0 unauthorized host OS operations across all test runs.
