@@ -1,14 +1,17 @@
 """src/agent/graph.py
 Deterministic State Machine Assembly with Pure Async Closures.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, Literal
-from langgraph.graph import StateGraph, END
+
 from langchain_core.messages import AIMessage
-from src.agent.state import AgentState
-from src.agent.nodes import agent_node, tool_node, force_end_node
+from langgraph.graph import END, StateGraph
+
 from src.agent.mcp_client import MCPClientManager
+from src.agent.nodes import agent_node, force_end_node, tool_node
+from src.agent.state import AgentState
 
 
 def route_agent_output(state: AgentState) -> Literal["force_end", "tools", "end"]:
@@ -23,12 +26,9 @@ def route_agent_output(state: AgentState) -> Literal["force_end", "tools", "end"
     return "end"
 
 
-def build_agent_workflow(
-    model: Any,
-    client_manager: MCPClientManager,
-) -> StateGraph:
+def build_agent_workflow(model: Any, client_manager: MCPClientManager) -> Any:
     """Builds and wires the ReAct StateGraph with verified asynchronous closures."""
-    workflow = StateGraph(AgentState)
+    workflow: StateGraph[AgentState] = StateGraph(AgentState)
 
     # Explicit async closures preserve the coroutine function signature
     async def run_agent(state: AgentState) -> Dict[str, Any]:

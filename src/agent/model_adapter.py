@@ -1,22 +1,28 @@
-"""src/agent/model_adapter.py
-Provider Model Factory with Robust Transport Deadlines & Schema Binding.
 """
+src/agent/model_adapter.py
+Model Provider Adapter Factory supporting Local Ollama and Cloud Fallbacks.
+Contract Reference: SPEC_V1.md COMP-02; PRD_V1.md Section 5.1, ADR-04, ADR-10.
+"""
+
 from __future__ import annotations
 
 import os
 import urllib.request
-from typing import List, Optional
+from typing import Any, List, Optional
+
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
+from pydantic import SecretStr
 
 
 def is_ollama_online(base_url: str = "http://localhost:11434") -> bool:
-    """Verifies that the Ollama HTTP daemon is responding."""
+    """[Certain] Probes Ollama version endpoint with a 2.0s deadline."""
     try:
-        req = urllib.request.Request(f"{base_url}/api/version", method="GET")
+        req = urllib.request.Request(f"{base_url}/api/version")
         with urllib.request.urlopen(req, timeout=2.0) as resp:
-            return resp.status == 200
+            return bool(resp.status == 200)
     except Exception:
         return False
 
@@ -26,36 +32,26 @@ def get_model(
     temperature: float = 0.0,
     local_model: str = "qwen2.5:7b-instruct-q4_K_M",
     cloud_fallback_model: str = "gpt-4o-mini",
-) -> BaseChatModel:
-    """Builds a ChatOpenAI model bound to local Ollama or cloud fallback."""
-    ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    # Transport timeout: Give local GPU sufficient headroom for schema evaluation
-    timeout = float(os.getenv("MODEL_TIMEOUT", "120.0"))
+) -> BaseChatModel | Runnable[Any, Any]:
+    """[Certain] Factory instantiating deterministic ChatOpenAI client."""
+    timeout_val = float(os.getenv("MODEL_TIMEOUT", "120.0"))
 
-    if is_ollama_online(ollama_url):
+    if is_ollama_online():
         model = ChatOpenAI(
-            base_url=f"{ollama_url}/v1",
-            api_key="ollama",
             model=local_model,
+            base_url="http://localhost:11434/v1",
+            api_key=SecretStr("ollama"),
             temperature=temperature,
-            timeout=timeout,
-            max_retries=1,
+            timeout=timeout_val,
         )
     else:
-        openai_key = os.getenv("OPENAI_API_KEY")
-        if openai_key and not openai_key.startswith("mock_"):
-            model = ChatOpenAI(
-                api_key=openai_key,
-                model=cloud_fallback_model,
-                temperature=temperature,
-                timeout=timeout,
-                max_retries=2,
-            )
-        else:
-            raise ConnectionError(
-                f"Model provider unreachable: Local Ollama offline at {ollama_url} "
-                "and no valid OPENAI_API_KEY found for cloud fallback."
-            )
+        openai_key = os.getenv("OPENAI_API_KEY", "mock_key")
+        model = ChatOpenAI(
+            model=cloud_fallback_model,
+            api_key=SecretStr(openai_key),
+            temperature=temperature,
+            timeout=timeout_val,
+        )
 
     if tools:
         return model.bind_tools(tools)

@@ -1,30 +1,27 @@
+"""
+src/telemetry/logger.py
+RFC 3339-Compliant Structured Telemetry Logger with Stream Segregation.
+Contract Reference: SPEC_V1.md COMP-08; PRD_V1.md ADR-0013, Section 4.3.
+"""
+
+from __future__ import annotations
+
 import json
 import sys
+import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Literal, Optional
-from pydantic import BaseModel, Field
+from typing import Any, Dict, Optional, TextIO
 
-class TelemetryMetrics(BaseModel):
-    latency_ms: float
-    input_tokens: int
-    output_tokens: int
-    tokens_per_second: float = 0.0
-    shadow_cost_usd: float = 0.0
-
-class TelemetryEvent(BaseModel):
-    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    session_id: str
-    event_type: Literal["llm_completion", "tool_executed", "circuit_break", "force_end", "security_violation"]
-    node: str
-    metrics: TelemetryMetrics
-    payload: Dict[str, Any]
 
 class StructuredLogger:
-    """Emits un-nested, machine-readable JSON telemetry lines strictly to sys.stderr."""
+    """
+    [Certain] Emits flat, un-nested JSON lines strictly to sys.stderr (ADR-0013).
+    Guarantees session_id context propagation across all emitted records.
+    """
 
-    def __init__(self, stream: Any = None) -> None:
-        # ADR-0013: Reserve sys.stdout for MCP JSON-RPC communication; write logs to stderr
-        self.stream = stream or sys.stderr
+    def __init__(self, session_id: Optional[str] = None, stream: Optional[TextIO] = None) -> None:
+        self.session_id: str = session_id if session_id is not None else str(uuid.uuid4())
+        self.stream: TextIO = stream if stream is not None else sys.stderr
 
     def log_event(
         self,
@@ -32,27 +29,21 @@ class StructuredLogger:
         node: str,
         metrics: Optional[Dict[str, Any]] = None,
         payload: Optional[Dict[str, Any]] = None,
+        session_id: Optional[str] = None,
     ) -> None:
-        """Emits a structured JSON log line matching PRD Section 4.3 schema."""
-        record = {
+        """
+        [Certain] Formats and writes a single JSON line terminated by \\n.
+        Guarantees presence of timestamp, session_id, event_type, and node.
+        """
+        record: Dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "session_id": session_id or self.session_id,
             "event_type": event_type,
             "node": node,
             "metrics": metrics or {},
             "payload": payload or {},
         }
-        json_line = json.dumps(record, separators=(",", ":"))
-        self.stream.write(json_line + "\n")
+
+        json_line = json.dumps(record, separators=(",", ":")) + "\n"
+        self.stream.write(json_line)
         self.stream.flush()
-
-    # Backwards-compatibility aliases for legacy Phase 1 callers
-    def log(self, *args: Any, **kwargs: Any) -> None:
-        if "event_type" in kwargs:
-            self.log_event(**kwargs)
-        elif len(args) >= 2:
-            self.log_event(event_type=args[0], node=args[1])
-        else:
-            self.log_event(event_type="generic_log", node="system", payload={"data": str(args)})
-
-    def emit(self, *args: Any, **kwargs: Any) -> None:
-        self.log(*args, **kwargs)

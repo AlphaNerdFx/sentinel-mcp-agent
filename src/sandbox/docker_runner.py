@@ -1,9 +1,12 @@
-import docker
 import time
 from dataclasses import dataclass
 
+import docker
+
+
 class DockerDaemonUnavailableError(Exception):
     pass
+
 
 @dataclass(frozen=True)
 class ExecutionResult:
@@ -12,6 +15,7 @@ class ExecutionResult:
     exit_code: int
     duration_ms: float
     timed_out: bool
+
 
 class DockerPythonSandbox:
     def __init__(
@@ -29,13 +33,13 @@ class DockerPythonSandbox:
             self.client = docker.from_env()
             self.client.ping()
         except Exception as exc:
-            raise DockerDaemonUnavailableError(f"Docker daemon is unreachable: {exc}")
+            raise DockerDaemonUnavailableError(f"Docker daemon is unreachable: {exc}") from exc
 
     def execute_code(self, script_contents: str) -> ExecutionResult:
         start_time = time.perf_counter()
         container = None
         timed_out = False
-        
+
         # Enforce execution safety constraints
         nano_cpus = int(self.cpu_quota * 1_000_000_000)
         cmd = ["python", "-u", "-c", script_contents]
@@ -51,16 +55,16 @@ class DockerPythonSandbox:
                 read_only=True,
                 tmpfs={"/tmp": "rw,size=16m"},
                 user="nobody",  # Drop root permissions
-                detach=True
+                detach=True,
             )
-            
+
             container.start()
-            
+
             # Poll status until timeout expiration
             poll_interval = 0.1
             elapsed = 0.0
             finished = False
-            
+
             while elapsed < self.timeout_seconds:
                 container.reload()
                 if container.status in ["exited", "dead"]:
@@ -68,7 +72,7 @@ class DockerPythonSandbox:
                     break
                 time.sleep(poll_interval)
                 elapsed += poll_interval
-            
+
             if not finished:
                 timed_out = True
                 try:
@@ -82,14 +86,14 @@ class DockerPythonSandbox:
 
             stdout = container.logs(stdout=True, stderr=False).decode("utf-8", errors="replace")
             stderr = container.logs(stdout=False, stderr=True).decode("utf-8", errors="replace")
-            
+
         except Exception as err:
             return ExecutionResult(
                 stdout="",
                 stderr=f"Runtime container failure: {str(err)}",
                 exit_code=1,
                 duration_ms=(time.perf_counter() - start_time) * 1000,
-                timed_out=False
+                timed_out=False,
             )
         finally:
             if container:
@@ -104,5 +108,5 @@ class DockerPythonSandbox:
             stderr=stderr,
             exit_code=exit_code,
             duration_ms=duration_ms,
-            timed_out=timed_out
+            timed_out=timed_out,
         )

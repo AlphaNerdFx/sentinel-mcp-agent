@@ -4,11 +4,13 @@ Enforces SHA-256 argument fingerprinting with semantic AST normalization
 to intercept repetitive or cycling tool-calling patterns.
 """
 
-import json
 import hashlib
+import json
 import sys
 from typing import Any, Dict, List, Tuple
+
 import sqlglot
+
 
 class ToolCallCircuitBreaker:
     @classmethod
@@ -18,7 +20,7 @@ class ToolCallCircuitBreaker:
         Translates SQL queries into normalized AST representations to prevent syntax drift.
         """
         cleaned_args = dict(args)
-        
+
         if tool_name == "query_database" and "sql_query" in cleaned_args:
             raw_sql = str(cleaned_args["sql_query"])
             try:
@@ -44,10 +46,7 @@ class ToolCallCircuitBreaker:
         normalized = cls.normalize_arguments(tool_name, args)
         try:
             canonical_payload = json.dumps(
-                normalized,
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=True
+                normalized, sort_keys=True, separators=(",", ":"), ensure_ascii=True
             )
         except (TypeError, ValueError):
             # Fallback representation for non-serializable types
@@ -58,10 +57,7 @@ class ToolCallCircuitBreaker:
 
     @classmethod
     def inspect_call(
-        cls,
-        fingerprint: str,
-        history: List[str],
-        strike_threshold: int = 3
+        cls, fingerprint: str, history: List[str], strike_threshold: int = 3
     ) -> Tuple[bool, int]:
         """
         Evaluates current fingerprint occurrences against execution history.
@@ -70,6 +66,6 @@ class ToolCallCircuitBreaker:
         # Count prior occurrences of identical signature in session history
         prior_occurrences = history.count(fingerprint)
         current_strike = prior_occurrences + 1
-        
+
         is_tripped = current_strike >= strike_threshold
         return is_tripped, current_strike

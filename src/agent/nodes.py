@@ -1,15 +1,18 @@
 """src/agent/nodes.py
 State Machine Execution Nodes with Atomic Wire-Protocol Enforcement.
 """
+
 from __future__ import annotations
 
 import time
 from typing import Any, Dict, List
+
 from langchain_core.messages import AIMessage, ToolMessage
-from src.agent.state import AgentState, canonical_fingerprint
+
 from src.agent.mcp_client import MCPClientManager
-from src.telemetry.logger import StructuredLogger
+from src.agent.state import AgentState, canonical_fingerprint
 from src.telemetry.cost import CostEngine
+from src.telemetry.logger import StructuredLogger
 
 logger = StructuredLogger()
 cost_engine = CostEngine()
@@ -57,7 +60,6 @@ async def agent_node(state: AgentState, model: Any) -> Dict[str, Any]:
 
 async def tool_node(state: AgentState, client_manager: MCPClientManager) -> Dict[str, Any]:
     """Atomic Partition & Dispatch Node.
-    
     Partitions tool calls into safe vs tripped. Safely executes non-tripped calls
     while injecting synthetic ToolMessages for tripped calls. Fulfills 100% of tool_call_ids.
     """
@@ -83,7 +85,11 @@ async def tool_node(state: AgentState, client_manager: MCPClientManager) -> Dict
                 event_type="circuit_breaker_tripped",
                 node="tool_node",
                 metrics={"strike_count": count},
-                payload={"tool_name": name, "tool_call_id": call_id, "session_id": state["session_id"]},
+                payload={
+                    "tool_name": name,
+                    "tool_call_id": call_id,
+                    "session_id": state["session_id"],
+                },
             )
             outgoing_messages.append(
                 ToolMessage(
@@ -113,7 +119,11 @@ async def tool_node(state: AgentState, client_manager: MCPClientManager) -> Dict
                 event_type="tool_execution",
                 node="tool_node",
                 metrics={"latency_ms": latency_ms, "is_error": is_error},
-                payload={"tool_name": name, "tool_call_id": call_id, "session_id": state["session_id"]},
+                payload={
+                    "tool_name": name,
+                    "tool_call_id": call_id,
+                    "session_id": state["session_id"],
+                },
             )
             outgoing_messages.append(ToolMessage(tool_call_id=call_id, content=content, name=name))
 
@@ -139,6 +149,8 @@ async def force_end_node(state: AgentState) -> Dict[str, Any]:
             )
 
     synthetic_messages.append(
-        AIMessage(content="Maximum iteration limit reached (10). Operation halted by runtime policy.")
+        AIMessage(
+            content="Maximum iteration limit reached (10). Operation halted by runtime policy."
+        )
     )
     return {"messages": synthetic_messages}

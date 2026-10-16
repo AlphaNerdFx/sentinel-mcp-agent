@@ -1,62 +1,61 @@
-import sqlite3
+"""
+src/tools/database.py
+Relational Database Access Engine with C-Authorizer and Read-Only Connection Enforcement.
+Contract Reference: SPEC_V1.md COMP-06; PRD_V1.md ADR-0014, US-03.
+"""
+
+from __future__ import annotations
+
 import os
-from typing import List, Dict, Any
+import sqlite3
+from typing import Any, Dict, List, Optional
+
 
 class SecurityViolationError(Exception):
-    """Raised when query execution triggers security policy barriers."""
+    """Raised when SQLite query violates the read-only security authorizer."""
+
     pass
 
+
 class DatabaseEngine:
+    """
+    [Certain] Low-level SQLite database access engine enforcing C-level security.
+    """
+
     def __init__(self, db_path: str = "company_metrics.db") -> None:
         self.db_path = db_path
-        self._init_db_file()
 
-    def _init_db_file(self) -> None:
-        """Seeds demo data if database does not exist."""
-        if not os.path.exists(self.db_path):
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute("""
-                CREATE TABLE product_revenue (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    product_name TEXT NOT NULL,
-                    quarter TEXT NOT NULL,
-                    revenue REAL NOT NULL
-                );
-            """)
-            cursor.executemany("""
-                INSERT INTO product_revenue (product_name, quarter, revenue)
-                VALUES (?, ?, ?)
-            """, [
-                ("CloudEngine", "Q1-2026", 1250000.00),
-                ("CloudEngine", "Q2-2026", 1450000.00),
-                ("DataShield", "Q1-2026", 800000.00),
-                ("DataShield", "Q2-2026", 950000.00),
-            ])
-            conn.commit()
-            conn.close()
-
-    @staticmethod
-    def _authorizer_guard(action_code: int, param1: Any, param2: Any, db_name: Any, trigger_name: Any) -> int:
+    def _authorizer_guard(
+        self,
+        action_code: int,
+        param1: Optional[str],
+        param2: Optional[str],
+        db_name: Optional[str],
+        trigger_name: Optional[str],
+    ) -> int:
         """
-        C-level interceptor. Only read operations are permitted.
-        Rejects all write, update, delete, schema alteration, or pragma calls.
+        [Certain] C-level authorizer callback (ADR-0014).
+        Permits only SELECT, READ, and basic scalar functions.
         """
-        SAFE_ACTIONS = {
+        safe_actions = {
             sqlite3.SQLITE_SELECT,
             sqlite3.SQLITE_READ,
-            sqlite3.SQLITE_FUNCTION
+            sqlite3.SQLITE_FUNCTION,
         }
-        if action_code in SAFE_ACTIONS:
+        if action_code in safe_actions:
             return sqlite3.SQLITE_OK
         return sqlite3.SQLITE_DENY
 
     def execute_query(self, sql_query: str) -> List[Dict[str, Any]]:
-        """Executes a read-only query using both URI flags and SQLite authorizer."""
-        # Normalize and run a preliminary check for denial-of-service attempts
+        """
+        [Certain] Executes read-only query using URI ro mode and C-authorizer.
+        Raises SecurityViolationError on unauthorized actions.
+        """
         normalized = sql_query.strip().lower()
         if "recursive" in normalized:
-            raise SecurityViolationError("Recursive queries are prohibited to prevent denial-of-service.")
+            raise SecurityViolationError(
+                "Recursive queries are prohibited to prevent denial-of-service."
+            )
 
         uri_path = f"file:{os.path.abspath(self.db_path)}?mode=ro"
         try:
@@ -69,17 +68,40 @@ class DatabaseEngine:
             results = [dict(row) for row in rows]
             conn.close()
             return results
-        except sqlite3.DatabaseError as e:
-            if "not authorized" in str(e).lower():
-                raise SecurityViolationError(f"Security Policy Violation: Operation prohibited: {e}")
-            raise RuntimeError(f"Database Execution Fault: {e}")
+        except sqlite3.DatabaseError as err:
+            if "not authorized" in str(err).lower():
+                raise SecurityViolationError(
+                    f"Security Policy Violation: Operation prohibited: {err}"
+                ) from err
+            raise RuntimeError(f"Database Execution Fault: {err}") from err
 
     def get_schema(self) -> str:
-        """Exposes schema for MCP Resource binding."""
+        """[Certain] Returns schema of product_revenue table."""
         uri_path = f"file:{os.path.abspath(self.db_path)}?mode=ro"
-        conn = sqlite3.connect(uri_path, uri=True)
+        conn = sqlite3.connect(uri_path, uri=True, timeout=2.0)
         cursor = conn.cursor()
-        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='product_revenue';")
+        cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='product_revenue';"
+        )
         row = cursor.fetchone()
         conn.close()
         return row[0] if row else ""
+
+
+_default_engine: Optional[DatabaseEngine] = None
+
+
+def query_database(query: str) -> List[Dict[str, Any]] | str:
+    """
+    [Certain] Public FastMCP tool wrapper.
+    Catches SecurityViolationError and serializes it to an agent-safe string.
+    """
+    global _default_engine
+    if _default_engine is None:
+        _default_engine = DatabaseEngine()
+    try:
+        return _default_engine.execute_query(query)
+    except SecurityViolationError as sec_err:
+        return str(sec_err)
+    except Exception as exc:
+        return f"Database Query Error: {exc}"

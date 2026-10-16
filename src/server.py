@@ -5,11 +5,13 @@ Adheres strictly to ADR-0013 stream segregation: stdout is reserved for JSON-RPC
 all diagnostics and telemetry are routed to stderr.
 """
 
-import sys
 import json
+import sys
+
 from fastmcp import FastMCP
-from src.tools.database import DatabaseEngine, SecurityViolationError
+
 from src.sandbox.docker_runner import DockerPythonSandbox
+from src.tools.database import DatabaseEngine, SecurityViolationError
 from src.tools.search import ResilientSearchEngine
 
 # Initialize FastMCP Server
@@ -26,6 +28,7 @@ sandbox = DockerPythonSandbox()
 # MCP RESOURCES
 # ============================================================================
 
+
 @mcp.resource("schema://main")
 def get_db_schema() -> str:
     """
@@ -40,9 +43,11 @@ def get_db_schema() -> str:
         sys.stderr.flush()
         return f"Error retrieving schema: {str(exc)}"
 
+
 # ============================================================================
 # MCP TOOLS
 # ============================================================================
+
 
 @mcp.tool()
 def query_database(sql_query: str) -> str:
@@ -62,6 +67,7 @@ def query_database(sql_query: str) -> str:
         sys.stderr.flush()
         return f"Database Error: {str(err)}"
 
+
 @mcp.tool()
 def run_python(code: str) -> str:
     """
@@ -69,18 +75,19 @@ def run_python(code: str) -> str:
     Imforces a 256MB RAM cap, 1.0 CPU limit, and 5-second hard execution timeout.
     """
     result = sandbox.execute_code(code)
-    
+
     if result.timed_out:
         return "Execution Error: Script timed out after 5.0 seconds (SIGKILL issued)."
-    
+
     if result.exit_code == 137:
         return "Execution Error: Memory limit exceeded (256MB cgroup ceiling)."
-    
+
     if result.exit_code != 0:
         return f"Execution Fault (Exit Code {result.exit_code}):\n{result.stderr.strip()}"
-    
+
     output = result.stdout.strip()
     return output if output else "Code executed successfully with zero stdout output."
+
 
 @mcp.tool()
 def web_search(query: str) -> str:
@@ -90,6 +97,7 @@ def web_search(query: str) -> str:
     """
     response = search_engine.search(query=query)
     return response.to_context_string()
+
 
 # ============================================================================
 # ENTRYPOINT

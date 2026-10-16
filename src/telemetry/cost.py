@@ -1,9 +1,11 @@
 from dataclasses import dataclass
 from typing import ClassVar, Dict
 
+
 @dataclass(frozen=True)
 class ShadowCostCalculator:
     """Calculates financial impact using standard commercial token pricing."""
+
     INPUT_RATE_PER_MILLION: ClassVar[float] = 0.15
     OUTPUT_RATE_PER_MILLION: ClassVar[float] = 0.60
 
@@ -12,6 +14,7 @@ class ShadowCostCalculator:
         in_cost = (input_tokens / 1_000_000.0) * cls.INPUT_RATE_PER_MILLION
         out_cost = (output_tokens / 1_000_000.0) * cls.OUTPUT_RATE_PER_MILLION
         return round(in_cost + out_cost, 8)
+
 
 class CostEngine:
     """Calculates shadow pricing and token unit economics across model providers."""
@@ -40,7 +43,7 @@ class CostEngine:
         """Computes simulated or real USD spend for a model completion turn."""
         rates = self.DEFAULT_PRICING.get(
             model_name,
-            self.DEFAULT_PRICING ["qwen2.5:7b-instruct-q4_K_M"],
+            self.DEFAULT_PRICING["qwen2.5:7b-instruct-q4_K_M"],
         )
         prompt_cost = (prompt_tokens / 1_000_000.0) * rates["prompt_per_1m"]
         completion_cost = (completion_tokens / 1_000_000.0) * rates["completion_per_1m"]
