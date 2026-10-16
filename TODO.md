@@ -113,17 +113,17 @@
 
 *Objective: Build automated tests proving all PRD acceptance criteria and security bounds are met.*
 
-- [ ] **Task 4.1: Unit Test Suite (`tests/unit/`)**
-  - [ ] `test_sandbox_security.py`: Verifies network block, 5s timeout kill, and 256MB RAM exhaustion handling (`ExitCode 137`).
-  - [ ] `test_sql_guardrails.py`: Verifies that destructive queries (`DROP`, `DELETE`, `UPDATE`) are rejected without database modification via C-authorizer (ADR-0014).
-  - [ ] `test_search_fallback.py`: Mocks DuckDuckGo failure and verifies automatic fallback to Tavily.
-  - [ ] `test_loop_detector.py`: Verifies that commutative AST fingerprinting catches duplicate calls regardless of key ordering, casing, or binary operator operand inversion (`1 = id` vs `id = 1`) (ADR-0015).
-  - [ ] `test_telemetry_schema.py`: Verifies that logs emit to `sys.stderr` and conform to the PRD Section 4.3 JSON schema.
-- [ ] **Task 4.2: End-to-End User Story Tests (`tests/e2e/`)**
-  - [ ] `test_us01_multistep_query.py`: Verifies that the agent queries SQL for revenue data, passes it to Python to compute a 15% increase, and returns the final answer in $\le 4$ steps.
-  - [ ] `test_us02_loop_interception.py`: Injects a failing tool scenario and verifies the circuit breaker halts execution at strike 3 without reaching the 10-step cap or dropping `tool_call_id`s (ADR-0017).
-  - [ ] `test_us03_security_containment.py`: Prompts the agent to run dangerous code (e.g., file deletion) and verifies the attempt is blocked.
-- [ ] **Task 4.3: GitHub Actions CI Workflow (`.github/workflows/ci.yml`)**
+- [X] **Task 4.1: Unit Test Suite (`tests/unit/`)**
+  - [X] `test_sandbox_security.py`: Verifies network block, 5s timeout kill, and 256MB RAM exhaustion handling (`ExitCode 137`).
+  - [X] `test_sql_guardrails.py`: Verifies that destructive queries (`DROP`, `DELETE`, `UPDATE`) are rejected without database modification via C-authorizer (ADR-0014).
+  - [X] `test_search_fallback.py`: Mocks DuckDuckGo failure and verifies automatic fallback to Tavily.
+  - [X] `test_loop_detector.py`: Verifies that commutative AST fingerprinting catches duplicate calls regardless of key ordering, casing, or binary operator operand inversion (`1 = id` vs `id = 1`) (ADR-0015).
+  - [X] `test_telemetry_schema.py`: Verifies that logs emit to `sys.stderr` and conform to the PRD Section 4.3 JSON schema.
+- [X] **Task 4.2: End-to-End User Story Tests (`tests/e2e/`)**
+  - [X] `test_us01_multistep_query.py`: Verifies that the agent queries SQL for revenue data, passes it to Python to compute a 15% increase, and returns the final answer in $\le 4$ steps.
+  - [X] `test_us02_loop_interception.py`: Injects a failing tool scenario and verifies the circuit breaker halts execution at strike 3 without reaching the 10-step cap or dropping `tool_call_id`s (ADR-0017).
+  - [X] `test_us03_security_containment.py`: Prompts the agent to run dangerous code (e.g., file deletion) and verifies the attempt is blocked.
+- [X] **Task 4.3: GitHub Actions CI Workflow (`.github/workflows/ci.yml`)**
   - [ ] Configure Ubuntu runner with Docker service enabled.
   - [ ] Add steps: checkout code, setup Python 3.11, install dependencies strictly from `requirements.lock` via `pip-sync`.
   - [ ] Configure test execution: run hermetic unit tests with mocked Ollama/cloud providers; run e2e tests gated by environment secrets.
