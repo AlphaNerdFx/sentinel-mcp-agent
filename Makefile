@@ -4,6 +4,7 @@
 
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
+export PYTHONPATH := .
 
 # Invariant: Prioritize local relative path to guarantee ZERO spaces in executable path
 ifneq ($(wildcard .venv/bin/python*),)
@@ -59,7 +60,7 @@ test: test-unit test-e2e
 
 ci: check-docker lint test-unit
 	@echo "==> Validating FastMCP Stdio Stream Segregation (ADR-0013)..."
-	@STDOUT_PAYLOAD=$$( $(PYTHON) src/server.py < /dev/null ); \
+	@STDOUT_PAYLOAD=$$( PYTHONPATH=. $(PYTHON) src/server.py < /dev/null ); \
 	if [ -n "$$STDOUT_PAYLOAD" ]; then \
 		echo "CRITICAL: ADR-0013 Stream Segregation Violation! Detected raw bytes on stdout:"; \
 		echo "$$STDOUT_PAYLOAD"; \
