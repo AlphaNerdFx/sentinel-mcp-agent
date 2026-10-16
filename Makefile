@@ -1,50 +1,46 @@
+# 1. Author .gitattributes to permanently prevent Windows CRLF (^M) line endings
+cat << 'EOF' > .gitattributes
+* text=auto eol=lf
+*.py text eol=lf
+Makefile text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.toml text eol=lf
+EOF
+
+# 2. Overwrite Makefile with pristine, relative, whitespace-immune paths
+cat << 'EOF' > Makefile
 # ==============================================================================
-# Enterprise ReAct MCP Agent - Production Automation Makefile
-# Target Standard: Forward Deployed Engineering Baseline (LTS 2026)
+# Enterprise ReAct MCP Agent - Production Automation Makefile (Whitespace-Immune)
 # ==============================================================================
 
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c
 
-# Dynamic Virtualenv & Binary Binding
-ifeq ($(wildcard .venv/bin/python),)
-    PYTHON ?= python3
-    PYTEST ?= pytest
-    PIP ?= pip
-    PIP_SYNC ?= pip-sync
-    RUFF ?= ruff
-    MYPY ?= mypy
+# Invariant: Prioritize local relative path to guarantee ZERO spaces in executable path
+ifneq ($(wildcard .venv/bin/python*),)
+    PYTHON := .venv/bin/python3
+else ifneq ($(wildcard venv/bin/python*),)
+    PYTHON := venv/bin/python3
 else
-    VENV := .venv
-    PYTHON ?= $(VENV)/bin/python
-    PYTEST ?= $(VENV)/bin/pytest
-    PIP ?= $(VENV)/bin/pip
-    PIP_SYNC ?= $(VENV)/bin/pip-sync
-    RUFF ?= $(VENV)/bin/ruff
-    MYPY ?= $(VENV)/bin/mypy
+    PYTHON := python3
 endif
 
-.PHONY: help install lock check-env check-docker lint lint-fix test-unit test-e2e test ci clean purge-legacy-tests
+# Execute tooling strictly through Python module interface (-m)
+RUFF := $(PYTHON) -m ruff
+MYPY := $(PYTHON) -m mypy
+PYTEST := $(PYTHON) -m pytest
+PIP := $(PYTHON) -m pip
+PIP_SYNC := $(PYTHON) -m piptools sync
+
+.PHONY: help install lock check-docker lint lint-fix test-unit test-e2e test ci clean
 
 help:
 	@echo "Available Automation Targets:"
-	@echo "  make install              Synchronize dependencies from requirements.lock via pip-sync"
-	@echo "  make lock                 Compile deterministic requirements.lock using pip-tools"
-	@echo "  make check-docker         Validate Docker socket connectivity and permissions"
-	@echo "  make lint                 Run Ruff linter and format validation"
-	@echo "  make lint-fix             Automatically resolve fixable lint and import formatting"
-	@echo "  make test-unit            Run all hermetic unit test suites"
-	@echo "  make test-e2e             Run user story integration tests (US-01..US-03)"
-	@echo "  make ci                   Execute complete end-to-end CI validation pipeline"
-	@echo "  make clean                Purge build caches, WAL files, and bytecode"
-
-install:
-	$(PIP) install --upgrade pip pip-tools
-	$(PIP_SYNC) requirements.lock
-
-lock:
-	$(PIP) install --upgrade pip-tools
-	pip-compile --generate-hashes --output-file=requirements.lock pyproject.toml --extra=dev
+	@echo "  make ci        Execute complete end-to-end CI pipeline"
+	@echo "  make lint      Run static analysis and format validation"
+	@echo "  make test      Run unit and e2e integration suites"
 
 check-docker:
 	@echo "==> Verifying Docker daemon and sandbox image availability..."
@@ -94,3 +90,7 @@ clean:
 	rm -f .agent_state.db* .test_phase2_state.db* test_guardrails_metrics.db*
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
+EOF
+
+# 3. Execute the full end-to-end CI pipeline
+make ci
