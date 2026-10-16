@@ -1,5 +1,5 @@
 # ==============================================================================
-# Enterprise ReAct MCP Agent - Production Automation Makefile (Whitespace-Immune)
+# Enterprise ReAct MCP Agent - Production Automation Makefile (Whitespace-Safe)
 # ==============================================================================
 
 SHELL := /bin/bash
@@ -7,11 +7,11 @@ SHELL := /bin/bash
 
 # Invariant: Prioritize local relative path to guarantee ZERO spaces in executable path
 ifneq ($(wildcard .venv/bin/python*),)
-    PYTHON := .venv/bin/python3
+	PYTHON := .venv/bin/python3
 else ifneq ($(wildcard venv/bin/python*),)
-    PYTHON := venv/bin/python3
+	PYTHON := venv/bin/python3
 else
-    PYTHON := python3
+	PYTHON := python3
 endif
 
 # Execute tooling strictly through Python module interface (-m)
