@@ -1,16 +1,3 @@
-# 1. Author .gitattributes to permanently prevent Windows CRLF (^M) line endings
-cat << 'EOF' > .gitattributes
-* text=auto eol=lf
-*.py text eol=lf
-Makefile text eol=lf
-*.sh text eol=lf
-*.md text eol=lf
-*.yml text eol=lf
-*.toml text eol=lf
-EOF
-
-# 2. Overwrite Makefile with pristine, relative, whitespace-immune paths
-cat << 'EOF' > Makefile
 # ==============================================================================
 # Enterprise ReAct MCP Agent - Production Automation Makefile (Whitespace-Immune)
 # ==============================================================================
@@ -90,7 +77,3 @@ clean:
 	rm -f .agent_state.db* .test_phase2_state.db* test_guardrails_metrics.db*
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
-EOF
-
-# 3. Execute the full end-to-end CI pipeline
-make ci
