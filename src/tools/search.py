@@ -53,23 +53,27 @@ class ResilientSearchEngine:
         self.timeout_seconds = timeout_seconds
 
     def _duckduckgo_search(self, query: str, max_results: int) -> List[SearchResultItem]:
-        """Tier 1: DuckDuckGo Zero-Key Provider."""
-        from duckduckgo_search import DDGS
+        """[Certain] Executes DuckDuckGo search with recent time-window fallback."""
+        from ddgs import DDGS
 
-        results: List[SearchResultItem] = []
         with DDGS(timeout=int(self.timeout_seconds)) as ddgs:
-            raw_results = list(ddgs.text(query, max_results=max_results))
+            # Query past month for temporal freshness
+            raw_results = list(ddgs.text(query, max_results=max_results, timelimit="m"))
+
+            # Fall back to unbounded search if temporal filter yields 0 results
+            if not raw_results:
+                raw_results = list(ddgs.text(query, max_results=max_results))
+
+            items: List[SearchResultItem] = []
             for r in raw_results:
-                results.append(
+                items.append(
                     SearchResultItem(
                         title=r.get("title", ""),
                         snippet=r.get("body", ""),
                         source_url=r.get("href", ""),
                     )
                 )
-        if not results:
-            raise RuntimeError("DuckDuckGo returned zero results")
-        return results
+            return items
 
     def _tavily_search(self, query: str, max_results: int) -> List[SearchResultItem]:
         """Tier 2: Tavily Paid Commercial Search API."""

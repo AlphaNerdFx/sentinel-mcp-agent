@@ -4,10 +4,19 @@ Serves database, sandbox, and search primitives over stdio JSON-RPC 2.0.
 Adheres strictly to ADR-0013 stream segregation: stdout is reserved for JSON-RPC;
 all diagnostics and telemetry are routed to stderr.
 """
+# At the very top of src/server.py (immediately after docstring / __future__)
+from __future__ import annotations
 
 import json
+import os
 import sys
 
+# INVARIANT: Must execute before any 'from src.' imports run on line 16!
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+# Now standard package imports resolve reliably across any execution context
 from fastmcp import FastMCP
 
 from src.sandbox.docker_runner import DockerPythonSandbox
@@ -15,9 +24,7 @@ from src.tools.database import DatabaseEngine, SecurityViolationError
 from src.tools.search import ResilientSearchEngine
 
 # Initialize FastMCP Server
-mcp = FastMCP(
-    name="Enterprise-Tool-Server",
-)
+mcp = FastMCP(name="Enterprise-Tool-Server",)
 
 # Instantiate tool backends
 db_engine = DatabaseEngine()
@@ -53,7 +60,16 @@ def get_db_schema() -> str:
 def query_database(sql_query: str) -> str:
     """
     Executes a read-only SQL query against company_metrics.db.
-    Guarded by C-level SQLite authorizer to prevent data mutation or deletion.
+    SCHEMA CONTRACT:
+    Table: product_revenue
+      Columns:
+        - id (INTEGER PRIMARY KEY)
+        - product_name (TEXT, values: 'CloudEngine', 'DataShield')
+        - quarter (TEXT, format: 'Q[1-4]-YYYY', values: 'Q1-2026', 'Q2-2026')
+        - revenue (REAL)
+
+    EXAMPLE:
+      SELECT revenue FROM product_revenue WHERE product_name = 'CloudEngine' AND quarter = 'Q1-2026';
     """
     try:
         rows = db_engine.execute_query(sql_query)
@@ -66,7 +82,6 @@ def query_database(sql_query: str) -> str:
         sys.stderr.write(f"[ERROR] Database execution error: {err}\n")
         sys.stderr.flush()
         return f"Database Error: {str(err)}"
-
 
 @mcp.tool()
 def run_python(code: str) -> str:
@@ -104,5 +119,5 @@ def web_search(query: str) -> str:
 # ============================================================================
 
 if __name__ == "__main__":
-    # Invariant: Run strictly on stdio transport
-    mcp.run(transport="stdio")
+    # Suppress startup banners over stdio transport
+    mcp.run(transport="stdio", show_banner=False)
