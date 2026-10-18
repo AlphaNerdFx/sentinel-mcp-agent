@@ -65,7 +65,7 @@ docker==7.2.0
     # via enterprise-mcp-agent (pyproject.toml)
 docstring-parser==0.18.0
     # via cyclopts
-duckduckgo-search==8.1.1
+ddgs==8.1.1
     # via enterprise-mcp-agent (pyproject.toml)
 email-validator==2.3.0
     # via pydantic

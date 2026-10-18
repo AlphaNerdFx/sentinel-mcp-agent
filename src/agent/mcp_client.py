@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from typing import Any, Optional
 
@@ -15,7 +16,17 @@ class MCPClientManager:
     """Manage an out-of-process FastMCP server over stdio."""
 
     def __init__(self, server_script: str = "src/server.py") -> None:
+        self.project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         self.server_script = server_script
+        env = dict(os.environ)
+        env["PYTHONPATH"] = self.project_root
+        self.client = Client(
+            transport=StdioTransport(
+                command=sys.executable,
+                args=[self.server_script],
+                env=env,
+            )
+        )
         self.transport = StdioTransport(
             command=sys.executable,
             args=[self.server_script],

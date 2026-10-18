@@ -1,5 +1,6 @@
 # Byte-compiled / optimized files
 __pycache__/
+.ruff_cache
 *.py[cod]
 *$py.class
 
@@ -43,6 +44,8 @@ env/
 *.db-journal
 *.sqlite3
 company_metrics.db
+.agent_state.db-shm
+.agent_state.db-wal
 
 # Testing & Coverage
 .tox/
