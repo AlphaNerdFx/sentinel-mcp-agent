@@ -14,8 +14,8 @@ import shutil
 import subprocess
 import sys
 from typing import Optional, Tuple
-import requests
 
+import requests
 
 # Terminal formatting constants
 CLR_RESET = "\033[0m"
@@ -52,13 +52,13 @@ def query_vram_via_nvml() -> Optional[Tuple[int, int, str]]:
         device_count = pynvml.nvmlDeviceGetCount()
         if device_count == 0:
             return None
-        
+
         # Select device 0 (primary GPU)
         handle = pynvml.nvmlDeviceGetHandleByIndex(0)
         device_name = pynvml.nvmlDeviceGetName(handle)
         if isinstance(device_name, bytes):
             device_name = device_name.decode("utf-8")
-            
+
         mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
         total_mb = int(mem_info.total / (1024 * 1024))
         free_mb = int(mem_info.free / (1024 * 1024))
@@ -90,7 +90,7 @@ def query_vram_via_cli() -> Optional[Tuple[int, int, str]]:
 
 def check_gpu_environment() -> bool:
     log_step("GPU VRAM Allocation & Headroom (Target: >= 1,000 MB Free)")
-    
+
     # Check if running in CI environment
     if os.getenv("CI", "false").lower() == "true":
         log_warn("CI environment detected. Skipping physical GPU check (Mock Fallback Active).")
@@ -98,7 +98,7 @@ def check_gpu_environment() -> bool:
 
     gpu_data = query_vram_via_nvml()
     source = "nvidia-ml-py"
-    
+
     if not gpu_data:
         gpu_data = query_vram_via_cli()
         source = "nvidia-smi CLI"

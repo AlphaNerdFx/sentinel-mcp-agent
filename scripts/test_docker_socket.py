@@ -7,9 +7,9 @@ Task 0.3 & COMP-05 Verification: Python Docker SDK Socket & Constraint Gate.
 import os
 import stat
 import sys
+
 import docker
 from docker.errors import DockerException
-
 
 CLR_RESET = "\033[0m"
 CLR_GREEN = "\033[92m"
@@ -35,12 +35,12 @@ def verify_docker_runtime() -> bool:
         is_socket = stat.S_ISSOCK(mode)
         readable = os.access(socket_path, os.R_OK)
         writable = os.access(socket_path, os.W_OK)
-        
+
         if is_socket and readable and writable:
             log_pass(f"UNIX domain socket '{socket_path}' is accessible without sudo (R/W OK).")
         else:
             log_fail(f"UNIX socket '{socket_path}' has invalid permissions. Readable={readable}, Writable={writable}.")
-            print(f"    Fix: sudo usermod -aG docker $USER && newgrp docker")
+            print("    Fix: sudo usermod -aG docker $USER && newgrp docker")
             return False
     else:
         # On Windows native, Docker uses named pipe npipe:////./pipe/docker_engine
@@ -73,7 +73,7 @@ def verify_docker_runtime() -> bool:
             stdout=True,
             stderr=True,
         )
-        
+
         output = container.decode("utf-8").strip()
         if output == "SDK_SOCKET_OK":
             log_pass("COMP-05 container execution verified (network=none, 256MB cap, tmpfs active).")

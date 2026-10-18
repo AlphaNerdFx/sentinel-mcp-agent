@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from pathlib import Path
 import uuid
+from pathlib import Path
 
 # Deterministic Root Anchoring: inject repository root into sys.path
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -15,9 +15,10 @@ if str(REPO_ROOT) not in sys.path:
 
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+from src.agent.graph import build_agent_workflow
 from src.agent.mcp_client import MCPClientManager
 from src.agent.model_adapter import get_model
-from src.agent.graph import build_agent_workflow
 
 
 async def main() -> None:

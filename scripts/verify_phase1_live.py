@@ -8,17 +8,17 @@ Tests:
 """
 
 import os
-import sys
 import sqlite3
 import statistics
+import sys
 from typing import List
 
 # Ensure repository root is on sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.tools.database import DatabaseEngine
 from src.sandbox.docker_runner import DockerPythonSandbox
-from src.tools.search import ResilientSearchEngine, UnifiedSearchResponse, SearchResultItem
+from src.tools.database import DatabaseEngine
+from src.tools.search import ResilientSearchEngine, SearchResultItem, UnifiedSearchResponse
 
 
 def log(msg: str) -> None:
@@ -44,7 +44,7 @@ def success(msg: str) -> None:
 def verify_sqlite_uri_readonly() -> None:
     log("Verifying SQLite URI read-only enforcement independent of authorizer...")
     db_path = "company_metrics.db"
-    
+
     # Initialize DB file if missing
     engine = DatabaseEngine(db_path=db_path)
     abs_path = os.path.abspath(db_path)
@@ -82,7 +82,7 @@ def verify_sqlite_uri_readonly() -> None:
 def verify_docker_benchmark() -> None:
     log("Benchmarking Docker container execution lifecycle across 5 analytical runs...")
     sandbox = DockerPythonSandbox(timeout_seconds=5)
-    
+
     benchmark_script = """
 import math
 data = [math.sqrt(i) for i in range(1_000_000)]
@@ -101,9 +101,9 @@ print(f"SUM:{sum(data):.2f}")
 
     p50 = statistics.median(latencies)
     max_lat = max(latencies)
-    
+
     log(f"Docker Performance Metrics -> P50: {p50:.2f} ms | Max: {max_lat:.2f} ms")
-    
+
     # Hard SLA verification
     if max_lat >= 5000.0:
         fail(f"Docker execution breached 5000ms hard ceiling: Max was {max_lat:.2f}ms")
@@ -126,10 +126,10 @@ print(f"SUM:{sum(data):.2f}")
 
 def verify_live_search_and_schema() -> None:
     log("Verifying live search providers and strict Pydantic schema validation...")
-    
+
     tavily_key = os.getenv("TAVILY_API_KEY")
     brave_key = os.getenv("BRAVE_API_KEY")
-    
+
     log(f"Keys present: Tavily={'YES' if tavily_key else 'NO'} | Brave={'YES' if brave_key else 'NO'}")
 
     engine = ResilientSearchEngine(
@@ -142,14 +142,14 @@ def verify_live_search_and_schema() -> None:
     def validate_schema(resp: UnifiedSearchResponse, expected_provider: str) -> None:
         if not isinstance(resp, UnifiedSearchResponse):
             fail(f"Search returned non-Pydantic object: {type(resp)}")
-        
+
         # Validate serialization round-trip
         dumped = resp.model_dump()
         reconstructed = UnifiedSearchResponse.model_validate(dumped)
-        
+
         if reconstructed.provider_used != expected_provider:
             fail(f"Provider mismatch: Expected {expected_provider}, got {reconstructed.provider_used}")
-        
+
         if not reconstructed.results:
             fail(f"Provider {expected_provider} returned 0 results for live query.")
 
