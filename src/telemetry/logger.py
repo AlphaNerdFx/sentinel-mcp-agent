@@ -1,7 +1,6 @@
 """
-src/telemetry/logger.py
-RFC 3339-Compliant Structured Telemetry Logger with Stream Segregation.
-Contract Reference: SPEC_V1.md COMP-08; PRD_V1.md ADR-0013, Section 4.3.
+Structured Telemetry & Cost Accounting Engine (COMP-08)
+Standard: RFC 3339 Single-Line JSON to sys.stderr (ADR-0013)
 """
 
 from __future__ import annotations
@@ -9,19 +8,25 @@ from __future__ import annotations
 import json
 import sys
 import uuid
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, TextIO
 
+current_session_id: ContextVar[Optional[str]] = ContextVar("current_session_id", default=None)
+
 
 class StructuredLogger:
-    """
-    [Certain] Emits flat, un-nested JSON lines strictly to sys.stderr (ADR-0013).
-    Guarantees session_id context propagation across all emitted records.
-    """
+    """Emits structured RFC 3339 JSON telemetry records strictly to stderr."""
 
-    def __init__(self, session_id: Optional[str] = None, stream: Optional[TextIO] = None) -> None:
-        self.session_id: str = session_id if session_id is not None else str(uuid.uuid4())
-        self.stream: TextIO = stream if stream is not None else sys.stderr
+    def __init__(
+        self,
+        session_id: Optional[str] = None,
+        stream: Optional[TextIO] = None,
+        verbose: bool = False,
+    ) -> None:
+        self.session_id: str = session_id or str(uuid.uuid4())
+        self.stream: TextIO = stream or sys.stderr
+        self.verbose: bool = verbose
 
     def log_event(
         self,
@@ -31,19 +36,37 @@ class StructuredLogger:
         payload: Optional[Dict[str, Any]] = None,
         session_id: Optional[str] = None,
     ) -> None:
-        """
-        [Certain] Formats and writes a single JSON line terminated by \\n.
-        Guarantees presence of timestamp, session_id, event_type, and node.
-        """
+        """Emits a single-line un-nested JSON record or formatted trace to sys.stderr."""
+        ambient_id = current_session_id.get()
+        active_session_id = session_id or ambient_id or self.session_id
+
+        # Also extract session_id if legacy code passed it inside payload
+        if payload and "session_id" in payload:
+            active_session_id = payload.pop("session_id")
+
+        timestamp = datetime.now(timezone.utc).isoformat()
+
         record: Dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "session_id": session_id or self.session_id,
+            "timestamp": timestamp,
+            "session_id": active_session_id,
             "event_type": event_type,
             "node": node,
             "metrics": metrics or {},
             "payload": payload or {},
         }
 
-        json_line = json.dumps(record, separators=(",", ":")) + "\n"
-        self.stream.write(json_line)
-        self.stream.flush()
+        if self.verbose:
+            # Human-readable ANSI colorized trace for CLI operators
+            node_color = "\033[35m" if node == "agent_node" else "\033[33m"
+            reset = "\033[0m"
+            latency = (
+                f" | Latency: {metrics.get('latency_ms', 0):.1f}ms"
+                if metrics and "latency_ms" in metrics
+                else ""
+            )
+            self.stream.write(f"{node_color}[{node.upper()}]{reset} {event_type}{latency}\n")
+            self.stream.flush()
+        else:
+            # ADR-0013 / PRD Section 4.3 Machine-Readable Single-Line JSON
+            self.stream.write(json.dumps(record, separators=(",", ":")) + "\n")
+            self.stream.flush()

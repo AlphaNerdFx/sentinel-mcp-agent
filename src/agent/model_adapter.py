@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import os
 import urllib.request
-from typing import Any, List, Optional
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.runnables import Runnable
@@ -28,13 +29,23 @@ def is_ollama_online(base_url: str = "http://localhost:11434") -> bool:
 
 
 def get_model(
-    tools: Optional[List[BaseTool]] = None,
+    tools: Optional[Sequence[BaseTool]] = None,
     temperature: float = 0.0,
     local_model: str = "qwen2.5:7b-instruct-q4_K_M",
     cloud_fallback_model: str = "gpt-4o-mini",
 ) -> BaseChatModel | Runnable[Any, Any]:
     """[Certain] Factory instantiating deterministic ChatOpenAI client."""
     timeout_val = float(os.getenv("MODEL_TIMEOUT", "120.0"))
+
+    if os.getenv("SENTINEL_MOCK_MODEL") == "1":
+        from langchain_community.chat_models import FakeListChatModel
+        # Returns instant deterministic tool calls for automated test suites
+        return FakeListChatModel(
+            responses=[
+                '{"name": "query_database", "arguments": {"query": "SELECT revenue FROM product_revenue WHERE product_name=\'CloudEngine\' AND quarter=\'Q1\'"}}',
+                "3450000",
+            ]
+        )
 
     if is_ollama_online():
         model = ChatOpenAI(
@@ -43,6 +54,7 @@ def get_model(
             api_key=SecretStr("ollama"),
             temperature=temperature,
             timeout=timeout_val,
+            extra_body={"keep_alive": -1},
         )
     else:
         openai_key = os.getenv("OPENAI_API_KEY", "mock_key")
