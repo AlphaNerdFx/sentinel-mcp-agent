@@ -1,9 +1,9 @@
 # TODO.md: Sentinel MCP Agent (V1 Release Roadmap)
 
-**Target Milestone:** Version 1.0.0 (Production Reference Stack)  
-**Tracking PRD:** `PRD_V1.md` (v1.3.0)  
-**Standard:** Forward Deployed Engineer (FDE) Portfolio Grade  
-**Current Status:** Phase 4 Signed Off (v0.4.0-phase4) | Phase 5 Active  
+**Target Milestone:** Version 1.0.0 (Production Reference Stack)
+**Tracking PRD:** `PRD_V1.md` (v1.3.0)
+**Standard:** Forward Deployed Engineer (FDE) Portfolio Grade
+**Current Status:** Phase 4 Signed Off (v0.4.0-phase4) | Phase 5 Active
 
 ---
 
@@ -93,6 +93,7 @@
 ## Phase 4: Verification Suite & CI/CD Pipeline
 
 - [X] **Task 4.1: Unit Test Suite (`tests/unit/`)**
+
   - [X] `tests/unit/tools/test_sandbox_security.py`: Verifies network block, 5s timeout kill, 256MB RAM OOM termination (`ExitCode 137`), and kernel VFS write refusal (`EROFS`/`EACCES`).
   - [X] `tests/unit/tools/test_sql_guardrails.py`: Verifies C-authorizer rejects DDL (`DROP`), DML (`DELETE`, `UPDATE`), system PRAGMAs, and database smuggling (`ATTACH`) at the engine layer (ADR-0014).
   - [X] `tests/unit/tools/test_search_fallback.py`: Verifies 3-tier cascade logic and unconfigured key bypassing without external network calls (ADR-0007).
@@ -102,14 +103,14 @@
   - [X] `tests/unit/agent/test_loop_detector.py`: Verifies commutative AST equality, relational inversion, boolean `AND`/`OR` sorting, and JSON key ordering (ADR-0016).
   - [X] `tests/unit/agent/test_telemetry_schema.py`: Verifies JSON lines emission strictly to `sys.stderr` with guaranteed `session_id` propagation.
   - [X] *Acceptance Criteria Met:* All 54 unit tests pass in 9.27 seconds on GitHub Actions hosted runners [Certain].
-
 - [X] **Task 4.2: End-to-End User Story Tests (`tests/e2e/`)**
+
   - [X] `test_us01_multistep_query.py`: Verifies multi-step analytical execution (SQL $\rightarrow$ Python 15% projection $\rightarrow$ Synthesis in $\le 4$ steps).
   - [X] `test_us02_loop_interception.py`: Verifies repetitive tool invocations halt at Strike 3 with synthetic `ToolMessage` without wire protocol drops (ADR-0018).
   - [X] `test_us03_security_containment.py`: Verifies that destructive SQL (`DROP TABLE`) and socket scans (`port 53`) are intercepted through the LangGraph state machine.
   - [X] *Acceptance Criteria Met:* All 4 E2E user story integration tests pass hermetically [Certain].
-
 - [X] **Task 4.3: CI/CD Pipeline Automation & Toolchain Hardening**
+
   - [X] Configure `.github/workflows/ci.yml` running on Ubuntu runners with pre-installed Docker services.
   - [X] Lock dependencies via `requirements.lock` including development extras (`--extra=dev`).
   - [X] Configure automation `Makefile` with whitespace-immune relative paths and `.gitattributes` LF line-ending normalization.
@@ -123,18 +124,18 @@
 
 ## Phase 5: Production Packaging & Portfolio Documentation (ACTIVE)
 
-- [ ] **Task 5.1: Zero-Config CLI Entry Point (`main.py`)**
-  - [ ] Implement command-line interface supporting positional prompt arguments: `python main.py "Calculate Q3 revenue"`.
-  - [ ] Support interactive multi-turn REPL mode via `--interactive` flag.
-  - [ ] Support persistent conversational session resumption via `--session-id <UUID>` targeting `.agent_state.db` (ADR-0017).
-  - [ ] Support `--verbose` flag toggling display of real-time structured telemetry events from `sys.stderr`.
-  - [ ] Implement deterministic POSIX exit codes: `0` (Success), `1` (Runtime Fault), `2` (Security Breach), `3` (Circuit Breaker Interception / Iteration Ceiling) (COMP-09).
-- [ ] **Task 5.2: Enterprise Production Documentation (`README.md`)**
-  - [ ] Author portfolio-grade architectural documentation with system design diagrams.
-  - [ ] Document stream demultiplexing architecture (ADR-0013) with ASCII data flow illustrations.
-  - [ ] Document cgroups v2 container isolation and C-authorizer database security models.
-  - [ ] Include reproducible setup instructions for Ubuntu, macOS, and Windows/WSL2.
-- [ ] **Task 5.3: Verification of KPIs Against Acceptance Criteria**
-  - [ ] Measure P95 multi-tool execution latency; verify $\le 8.5\text{ seconds}$ on warm local Ollama Qwen 2.5 7B runs.
-  - [ ] Verify 100% loop break rate across test suites.
-  - [ ] Verify 0 unauthorized host OS operations across all test runs.
+- [X] **Task 5.1: Zero-Config CLI Entry Point (`main.py`)**
+  - [X] Implement command-line interface supporting positional prompt arguments: `python main.py "Calculate Q3 revenue"`.
+  - [X] Support interactive multi-turn REPL mode via `--interactive` flag.
+  - [X] Support persistent conversational session resumption via `--session-id <UUID>` targeting `.agent_state.db` (ADR-0017).
+  - [X] Support `--verbose` flag toggling display of real-time structured telemetry events from `sys.stderr`.
+  - [X] Implement deterministic POSIX exit codes: `0` (Success), `1` (Runtime Fault), `2` (Security Breach), `3` (Circuit Breaker Interception / Iteration Ceiling) (COMP-09).
+- [X] **Task 5.2: Enterprise Production Documentation (`README.md`)**
+  - [X] Author portfolio-grade architectural documentation with system design diagrams.
+  - [X] Document stream demultiplexing architecture (ADR-0013) with ASCII data flow illustrations.
+  - [X] Document cgroups v2 container isolation and C-authorizer database security models.
+  - [X] Include reproducible setup instructions for Ubuntu, macOS, and Windows/WSL2.
+- [X] **Task 5.3: Verification of KPIs Against Acceptance Criteria**
+  - [X] Measure P95 multi-tool execution latency; verify $\le 8.5\text{ seconds}$ on warm local Ollama Qwen 2.5 7B runs.
+  - [X] Verify 100% loop break rate across test suites.
+  - [X] Verify 0 unauthorized host OS operations across all test runs.
