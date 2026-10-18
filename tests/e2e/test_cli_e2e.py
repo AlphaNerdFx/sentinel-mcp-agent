@@ -15,6 +15,7 @@ from typing import Any, Dict, List
 
 # In tests/e2e/test_cli_e2e.py:
 
+
 def run_cli(
     *args: str,
     env_overrides: Dict[str, str] | None = None,
@@ -45,7 +46,10 @@ def test_cli_missing_arguments_returns_exit_code_1() -> None:
     result = run_cli()
 
     assert result.returncode == 1
-    assert "Error: Must provide either a prompt positional argument or --interactive flag" in result.stderr
+    assert (
+        "Error: Must provide either a prompt positional argument or --interactive flag"
+        in result.stderr
+    )
     assert result.stdout == ""
 
 
@@ -144,4 +148,6 @@ def test_cli_cross_process_persistence_resumption() -> None:
             (shared_session_id,),
         )
         checkpoints_turn_2 = cursor.fetchone()[0]
-        assert checkpoints_turn_2 > checkpoints_turn_1, "Turn 2 failed to append checkpoints to historical thread"
+        assert checkpoints_turn_2 > checkpoints_turn_1, (
+            "Turn 2 failed to append checkpoints to historical thread"
+        )

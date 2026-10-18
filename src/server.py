@@ -4,6 +4,7 @@ Serves database, sandbox, and search primitives over stdio JSON-RPC 2.0.
 Adheres strictly to ADR-0013 stream segregation: stdout is reserved for JSON-RPC;
 all diagnostics and telemetry are routed to stderr.
 """
+
 # At the very top of src/server.py (immediately after docstring / __future__)
 from __future__ import annotations
 
@@ -24,7 +25,9 @@ from src.tools.database import DatabaseEngine, SecurityViolationError
 from src.tools.search import ResilientSearchEngine
 
 # Initialize FastMCP Server
-mcp = FastMCP(name="Enterprise-Tool-Server",)
+mcp = FastMCP(
+    name="Enterprise-Tool-Server",
+)
 
 # Instantiate tool backends
 db_engine = DatabaseEngine()
@@ -82,6 +85,7 @@ def query_database(sql_query: str) -> str:
         sys.stderr.write(f"[ERROR] Database execution error: {err}\n")
         sys.stderr.flush()
         return f"Database Error: {str(err)}"
+
 
 @mcp.tool()
 def run_python(code: str) -> str:

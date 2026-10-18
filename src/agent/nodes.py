@@ -20,6 +20,7 @@ cost_engine = CostEngine()
 current_utc = datetime.now(timezone.utc)
 current_month_year = current_utc.strftime("%B %Y")
 
+
 async def agent_node(state: AgentState, model: Any) -> Dict[str, Any]:
     """Invokes LLM with non-streaming ainvoke and dynamic temporal grounding."""
     temporal_system_prompt = f"""You are Sentinel, an autonomous enterprise intelligence agent.
@@ -135,7 +136,7 @@ async def tool_node(state: AgentState, client_manager: MCPClientManager) -> Dict
                 tool_instance = client_manager.get_tool_by_name(name)
                 raw_output = await tool_instance.ainvoke(args)
                 if name == "web_search" and "query" in tool_call.get("args", {}):
-                    raw_output= tool_call["args"]["query"]
+                    raw_output = tool_call["args"]["query"]
                     # Replace relative conversational stop-words with the active year
                     cleaned = raw_output.replace("current ", "").replace("Current ", "")
                     cleaned = cleaned.replace("latest ", "").replace("Latest ", "")
@@ -147,7 +148,10 @@ async def tool_node(state: AgentState, client_manager: MCPClientManager) -> Dict
                 # Inspect database return strings for operational errors
                 is_db_error = False
                 if name == "query_database" and isinstance(raw_output, str):
-                    if "Database Error:" in raw_output or "Security Policy Violation:" in raw_output:
+                    if (
+                        "Database Error:" in raw_output
+                        or "Security Policy Violation:" in raw_output
+                    ):
                         is_db_error = True
 
                 content = str(raw_output)
@@ -169,8 +173,8 @@ async def tool_node(state: AgentState, client_manager: MCPClientManager) -> Dict
                 payload={
                     "tool_name": name,
                     "tool_call_id": tool_call["id"],
-                    "tool_args": tool_call.get("args", {}),          # <--- LOG THE ACTUAL QUERY
-                    "result_preview": result_preview,                # <--- LOG WHAT THE TOOL SAW
+                    "tool_args": tool_call.get("args", {}),  # <--- LOG THE ACTUAL QUERY
+                    "result_preview": result_preview,  # <--- LOG WHAT THE TOOL SAW
                 },
                 session_id=state["session_id"],
             )

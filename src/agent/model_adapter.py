@@ -1,7 +1,7 @@
 """
 src/agent/model_adapter.py
 Model Provider Adapter Factory supporting Local Ollama and Cloud Fallbacks.
-Contract Reference: SPEC_V1.md COMP-02; PRD_V1.md Section 5.1, ADR-04, ADR-10.
+Contract Reference: SPEC_V1.md COMP-02; PRD_V1.md Section 5.1, ADR-0004, ADR-0010.
 """
 
 from __future__ import annotations
@@ -34,21 +34,11 @@ def get_model(
     local_model: str = "qwen2.5:7b-instruct-q4_K_M",
     cloud_fallback_model: str = "gpt-4o-mini",
 ) -> BaseChatModel | Runnable[Any, Any]:
-    """[Certain] Factory instantiating deterministic ChatOpenAI client."""
+    """[Certain] Factory instantiating deterministic ChatOpenAI client with transport deadlines."""
     timeout_val = float(os.getenv("MODEL_TIMEOUT", "120.0"))
 
-    if os.getenv("SENTINEL_MOCK_MODEL") == "1":
-        from langchain_community.chat_models import FakeListChatModel
-        # Returns instant deterministic tool calls for automated test suites
-        return FakeListChatModel(
-            responses=[
-                '{"name": "query_database", "arguments": {"query": "SELECT revenue FROM product_revenue WHERE product_name=\'CloudEngine\' AND quarter=\'Q1\'"}}',
-                "3450000",
-            ]
-        )
-
     if is_ollama_online():
-        model = ChatOpenAI(
+        model: BaseChatModel = ChatOpenAI(
             model=local_model,
             base_url="http://localhost:11434/v1",
             api_key=SecretStr("ollama"),
