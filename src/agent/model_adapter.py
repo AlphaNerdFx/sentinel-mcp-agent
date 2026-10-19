@@ -19,6 +19,7 @@ from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
+
 class CIMockChatModel(BaseChatModel):
     """
     [Certain] Zero-network, typed mock model for headless CI environments.
