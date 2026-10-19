@@ -104,6 +104,7 @@ cat response.txt | jq .
 ## 3. Defense-in-Depth Security Models
 Sentinel does not rely on soft LLM prompt guardrails to prevent system exploitation. Security is enforced through kernel-level and engine-level hard boundaries:
 DEFENSE-IN-DEPTH SECURITY PERIMETER
+
                                              │
          ┌───────────────────────────────────┴───────────────────────────────────┐
          ▼                                                                       ▼
@@ -127,6 +128,7 @@ DEFENSE-IN-DEPTH SECURITY PERIMETER
 Fingerprint=SHA256(tool_name+":"+CanonicalizeAST(raw_sql))
 ```
 Raw LLM Query Variations
+
                                           │
             ┌─────────────────────────────┼─────────────────────────────┐
             ▼                             ▼                             ▼

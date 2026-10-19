@@ -19,12 +19,19 @@ from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
-
 class CIMockChatModel(BaseChatModel):
     """
     [Certain] Zero-network, typed mock model for headless CI environments.
     Satisfies BaseChatModel contracts without making outbound HTTP calls.
     """
+
+    def bind_tools(
+        self,
+        tools: Sequence[Any],
+        **kwargs: Any,
+    ) -> Runnable[Any, Any]:
+        """Overrides abstract BaseChatModel method to return self as a valid Runnable."""
+        return self
 
     def _generate(
         self,
